@@ -6,9 +6,9 @@ import {
 } from 'react-router-dom';
 
 import PublicLayout from '../components/layout/PublicLayout';
-import Inicio from '../pages/MediosEducativos/Portal/inicio/Inicio';
-import Informacion from '../pages/MediosEducativos/Portal/informacion/Informacion';
-import Ceremonias from '../pages/MediosEducativos/Eventos/Ceremonias/Ceremonias';
+import Inicio from '../pages/Public/Inicio/Inicio';
+import Informacion from '../pages/Public/Informacion/Informacion';
+import Ceremonias from "../pages/Admin/Eventos/Ceremonias/NuevaCeremonia";
 function AppRouter() {
   return (
     <BrowserRouter>
