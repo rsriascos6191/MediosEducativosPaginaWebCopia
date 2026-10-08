@@ -4,7 +4,6 @@
 
 import { Box, Typography, Button, Container, Card, CardContent } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import PublicLayout from "../../../components/layout/PublicLayout";
 
 const IMG = 'https://entreobras.com/wp-content/uploads/2016/10/Edificio-Sicilia-CESMAG-Pasto-Narin%CC%83o-3.jpg';
 
@@ -12,7 +11,7 @@ export default function Informacion() {
   const navigate = useNavigate();
 
   return (
-    <PublicLayout>
+    <>
       {/* Hero */}
       <Box sx={{ backgroundColor: '#0B3A5C', py: 6 }}>
         <Container maxWidth="lg">
@@ -89,6 +88,6 @@ export default function Informacion() {
           </Box>
         </Container>
       </Box>
-    </PublicLayout>
+    </>
   );
 }

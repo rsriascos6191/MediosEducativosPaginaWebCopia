@@ -4,7 +4,6 @@
 
 import { Box, Typography, Button, Container, Card, CardContent } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import PublicLayout from '../../../../components/PublicLayout';
 
 const SERVICIOS = [
   { id: 'espacios', titulo: 'Espacios académicos', n: '01', img: 'https://www.unicesmag.edu.co/recursos/uploads/2024/02/bienvenida-consultorio-I-2-1.jpg', path: '/espacios' },
@@ -19,7 +18,7 @@ export default function Servicios() {
   const navigate = useNavigate();
 
   return (
-    <PublicLayout>
+    <>
       <Box sx={{ backgroundColor: '#0B3A5C', py: 6 }}>
         <Container maxWidth="lg">
           <Typography sx={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', fontWeight: 600, mb: 1 }}>● MEDIOS EDUCATIVOS</Typography>
@@ -62,6 +61,6 @@ export default function Servicios() {
           ))}
         </Box>
       </Container>
-    </PublicLayout>
+    </>
   );
 }

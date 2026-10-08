@@ -4,7 +4,6 @@
 
 import { useState } from 'react';
 import { Box, Typography, Button, Container, TextField, Card, CardContent } from '@mui/material';
-import PublicLayout from '../../../../components/PublicLayout';
 
 const BANNER = 'https://entreobras.com/wp-content/uploads/2016/10/Edificio-Sicilia-CESMAG-Pasto-Narin%CC%83o-3.jpg';
 
@@ -21,7 +20,7 @@ export default function Contacto() {
   };
 
   return (
-    <PublicLayout>
+    <>
       <Container maxWidth="lg" sx={{ py: 5 }}>
         <Typography sx={{ fontWeight: 800, fontSize: { xs: '2rem', md: '2.5rem' }, color: '#0B1A2A', mb: 0.5 }}>
           Contacto
@@ -84,6 +83,6 @@ export default function Contacto() {
           </Card>
         </Box>
       </Container>
-    </PublicLayout>
+    </>
   );
 }

@@ -5,7 +5,6 @@
 import { useState } from 'react';
 import { Box, Typography, Button, Container, Card, CardContent, TextField, InputAdornment, Chip } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import PublicLayout from '../../../../components/PublicLayout';
 
 const CATS = ['Todos', 'Formatos de solicitud', 'Reglamentos y políticas', 'Manuales e instructivos', 'Documentos informativos'];
 
@@ -27,7 +26,7 @@ export default function Documentos() {
   });
 
   return (
-    <PublicLayout>
+    <>
       <Box sx={{
         backgroundImage: 'linear-gradient(90deg, rgba(11,58,92,0.9), rgba(11,58,92,0.7)), url(https://www.unicesmag.edu.co/recursos/uploads/2022/07/SedeCentroUCESMAG.webp)',
         backgroundSize: 'cover', backgroundPosition: 'center', py: 6,
@@ -101,6 +100,6 @@ export default function Documentos() {
           ))}
         </Box>
       </Container>
-    </PublicLayout>
+    </>
   );
 }

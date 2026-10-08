@@ -15,7 +15,6 @@ import {
   Chip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import AdminLayout from '../../../../components/AdminLayout';
 import type { Espacio, EspacioFilters } from './interfaces/espacios.interface';
 import {
   getEspacios,
@@ -59,7 +58,7 @@ export default function Espacios() {
   };
 
   return (
-    <AdminLayout>
+    <>
       {/* Header */}
       <Box
         sx={{
@@ -277,6 +276,6 @@ export default function Espacios() {
           ))}
         </Box>
       )}
-    </AdminLayout>
+    </>
   );
 }
