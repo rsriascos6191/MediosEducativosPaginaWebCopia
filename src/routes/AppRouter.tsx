@@ -11,7 +11,7 @@ import Contacto from '../pages/Public/Contacto/Contacto';
 import Informacion from '../pages/Public/Informacion/Informacion';
 import Ceremonias from "../pages/Admin/Eventos/Ceremonias/NuevaCeremonia";
 import Documentos from '../pages/Public/Documentos/Documentos';
-import Espacios from '../pages/Admin/Espacios/Espacios';
+import Espacios from '../pages/Public/Espacios/CatalogoEspacios';
 import Servicios from '../pages/Public/Servicios/Servicios';
 function AppRouter() {
   return (

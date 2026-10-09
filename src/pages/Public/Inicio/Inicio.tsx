@@ -25,19 +25,19 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const HERO_IMAGE =
-  'https://www.figma.com/api/mcp/asset/8da56da5-db18-4ef0-86c0-c86f80e515cf/dcaba.png';
+  'https://www.unicesmag.edu.co/recursos/uploads/2022/07/SedeCentroUCESMAG.webp';
 
 const AUDITORIO_IMAGE =
-  'https://www.figma.com/api/mcp/asset/a76d5636-1b6d-4685-98f8-6b9f82eb2c84/35edb.png';
+  'https://www.unicesmag.edu.co/recursos/uploads/2024/02/bienvenida-consultorio-I-2-1.jpg';
 
 const AULA_IMAGE =
-  'https://www.figma.com/api/mcp/asset/9753753b-cc76-407b-a705-60017c8624dd/e08d5.png';
+  'https://www.unicesmag.edu.co/recursos/uploads/2023/06/Difusion-VBG-03.jpg';
 
 const PISCINAS_IMAGE =
-  'https://www.figma.com/api/mcp/asset/3537c79c-3f1e-42fe-8a25-c8386fd3222c/5ec92.png';
+  'https://www.unicesmag.edu.co/recursos/uploads/2025/04/San-Damian-2025-06-scaled.webp';
 
 const CAMPUS_IMAGE =
-  'https://www.figma.com/api/mcp/asset/d50f9a12-7db9-4524-b9b8-b17369238f57/450cb.png';
+  'https://www.unicesmag.edu.co/recursos/uploads/2025/11/Nuevos-Programas-Unicesmag-2025.webp';
 
 
 type SpaceStatus =
@@ -384,8 +384,14 @@ function Inicio() {
         />
 
         <Container
-          maxWidth="xl"
+          maxWidth={false}
           sx={{
+            width: 'calc(100% - 120px)',
+            maxWidth: '1440px',
+            mx: 'auto',
+            px: 0,
+            '@media (max-width: 600px)': { width: 'calc(100% - 32px)' },
+
             position: 'relative',
             zIndex: 2,
             height: '100%',
@@ -441,7 +447,7 @@ function Inicio() {
                 mb: 4,
               }}
             >
-              En la Universidad CESMAG ponemos a tu disposición nuestros espacios para 
+              En la Universidad CESMAG ponemos a tu disposición nuestros espacios para
               que tus ideas, proyectos y actividades se hagan realidad.
             </Typography>
 
@@ -462,7 +468,7 @@ function Inicio() {
                   },
                 }}
               >
-                Explorar espacios 
+                Explorar espacios
               </Button>
 
               <Button
@@ -488,8 +494,14 @@ function Inicio() {
 
       {/* BUSCADOR */}
       <Container
-        maxWidth="xl"
+        maxWidth={false}
         sx={{
+          width: 'calc(100% - 120px)',
+          maxWidth: '1440px',
+          mx: 'auto',
+          px: 0,
+          '@media (max-width: 600px)': { width: 'calc(100% - 32px)' },
+
           position: 'relative',
           zIndex: 5,
           mt: { xs: -35, md: -9.5 },
@@ -635,7 +647,14 @@ function Inicio() {
           py: 7,
         }}
       >
-        <Container maxWidth="xl">
+        <Container maxWidth={false}
+          sx={{
+            width: 'calc(100% - 120px)',
+            maxWidth: '1440px',
+            mx: 'auto',
+            px: 0,
+            '@media (max-width: 600px)': { width: 'calc(100% - 32px)' },
+          }}>
           <Box sx={{ mb: 3 }}>
             <Box
               sx={{
@@ -683,7 +702,7 @@ function Inicio() {
           <Stack
             direction={{ xs: 'column', md: 'row' }}
             spacing={2}
-            sx={{ mb: 4,justifyContent: 'space-between', }}
+            sx={{ mb: 4, justifyContent: 'space-between', }}
           >
             <Stack direction="row" spacing={1}>
               <Button variant="outlined" size="small">
@@ -729,8 +748,8 @@ function Inicio() {
                       whiteSpace: 'nowrap',
                       ...(selectedCampus === item
                         ? {
-                            backgroundColor: '#1A4F85',
-                          }
+                          backgroundColor: '#1A4F85',
+                        }
                         : {}),
                     }}
                   >
@@ -886,10 +905,10 @@ function Inicio() {
                             '&:hover':
                               space.status === 'Disponible'
                                 ? {
-                                    transform: 'translateY(-1px)',
-                                    boxShadow:
-                                      '0 3px 10px rgba(26,79,133,0.14)',
-                                  }
+                                  transform: 'translateY(-1px)',
+                                  boxShadow:
+                                    '0 3px 10px rgba(26,79,133,0.14)',
+                                }
                                 : {},
                           }}
                         >
@@ -932,15 +951,22 @@ function Inicio() {
           py: 8,
         }}
       >
-        <Container maxWidth="xl">
-         <Stack
-  direction="row"
-  sx={{
-    mb: 4,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  }}
->
+        <Container maxWidth={false}
+          sx={{
+            width: 'calc(100% - 120px)',
+            maxWidth: '1440px',
+            mx: 'auto',
+            px: 0,
+            '@media (max-width: 600px)': { width: 'calc(100% - 32px)' },
+          }}>
+          <Stack
+            direction="row"
+            sx={{
+              mb: 4,
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
             <Box>
               <Typography
                 sx={{
@@ -1065,7 +1091,14 @@ function Inicio() {
           overflow: 'visible',
         }}
       >
-        <Container maxWidth="xl">
+        <Container maxWidth={false}
+          sx={{
+            width: 'calc(100% - 120px)',
+            maxWidth: '1440px',
+            mx: 'auto',
+            px: 0,
+            '@media (max-width: 600px)': { width: 'calc(100% - 32px)' },
+          }}>
           <Box
             sx={{
               position: 'relative',
@@ -1230,7 +1263,14 @@ function Inicio() {
           py: { xs: 7, md: 8 },
         }}
       >
-        <Container maxWidth="xl">
+        <Container maxWidth={false}
+          sx={{
+            width: 'calc(100% - 120px)',
+            maxWidth: '1440px',
+            mx: 'auto',
+            px: 0,
+            '@media (max-width: 600px)': { width: 'calc(100% - 32px)' },
+          }}>
           <Typography
             sx={{
               color: '#1A4F85',
@@ -1329,7 +1369,14 @@ function Inicio() {
             pb: { xs: 6, md: 7 },
           }}
         >
-          <Container maxWidth="xl">
+          <Container maxWidth={false}
+            sx={{
+              width: 'calc(100% - 120px)',
+              maxWidth: '1440px',
+              mx: 'auto',
+              px: 0,
+              '@media (max-width: 600px)': { width: 'calc(100% - 32px)' },
+            }}>
             <Typography
               component="h2"
               sx={{
@@ -1364,8 +1411,15 @@ function Inicio() {
             mt: 0,
           }}
         >
-    
-          <Container maxWidth="xl">
+
+          <Container maxWidth={false}
+            sx={{
+              width: 'calc(100% - 120px)',
+              maxWidth: '1440px',
+              mx: 'auto',
+              px: 0,
+              '@media (max-width: 600px)': { width: 'calc(100% - 32px)' },
+            }}>
             <Grid container spacing={2.5}>
               {services.map((service) => (
                 <Grid key={service.title} size={{ xs: 12, sm: 6, lg: 4 }}>
@@ -1469,7 +1523,14 @@ function Inicio() {
           py: { xs: 7, md: 8 },
         }}
       >
-        <Container maxWidth="xl">
+        <Container maxWidth={false}
+          sx={{
+            width: 'calc(100% - 120px)',
+            maxWidth: '1440px',
+            mx: 'auto',
+            px: 0,
+            '@media (max-width: 600px)': { width: 'calc(100% - 32px)' },
+          }}>
           <Typography
             sx={{
               color: '#1A4F85',
@@ -1573,7 +1634,14 @@ function Inicio() {
           py: { xs: 7, md: 8 },
         }}
       >
-        <Container maxWidth="xl">
+        <Container maxWidth={false}
+          sx={{
+            width: 'calc(100% - 120px)',
+            maxWidth: '1440px',
+            mx: 'auto',
+            px: 0,
+            '@media (max-width: 600px)': { width: 'calc(100% - 32px)' },
+          }}>
           <Typography
             sx={{
               color: '#E41E3F',
@@ -1743,7 +1811,14 @@ function Inicio() {
           py: { xs: 7, md: 8 },
         }}
       >
-        <Container maxWidth="xl">
+        <Container maxWidth={false}
+          sx={{
+            width: 'calc(100% - 120px)',
+            maxWidth: '1440px',
+            mx: 'auto',
+            px: 0,
+            '@media (max-width: 600px)': { width: 'calc(100% - 32px)' },
+          }}>
           <Grid container spacing={4} sx={{ alignItems: 'flex-start' }}>
             <Grid size={{ xs: 12, md: 6 }}>
               <Typography

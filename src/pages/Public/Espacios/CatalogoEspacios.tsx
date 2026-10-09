@@ -5,7 +5,6 @@
 import { useState } from 'react';
 import { Box, Typography, Button, Container, TextField, MenuItem, Card, CardContent, Pagination } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import PublicLayout from '../../../../components/PublicLayout';
 
 const ESPACIOS = [
   { id: '1', nombre: 'Auditorio', tipo: 'AUDITORIO', capacidad: '200 personas', campus: 'Campus Centro', img: 'https://www.unicesmag.edu.co/recursos/uploads/2024/02/bienvenida-consultorio-I-2-1.jpg' },
@@ -33,7 +32,7 @@ export default function CatalogoEspacios() {
   });
 
   return (
-    <PublicLayout>
+    <>
       <Box sx={{ backgroundColor: '#0B3A5C', py: 5 }}>
         <Container maxWidth="lg">
           <Typography sx={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', fontWeight: 600, mb: 1 }}>ESPACIOS CESMAG</Typography>
@@ -132,6 +131,6 @@ export default function CatalogoEspacios() {
             sx={{ '& .Mui-selected': { backgroundColor: '#E30613 !important', color: '#FFF' } }} />
         </Box>
       </Container>
-    </PublicLayout>
+    </>
   );
 }
