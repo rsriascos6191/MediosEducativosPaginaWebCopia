@@ -6,6 +6,7 @@ import {
 } from 'react-router-dom';
 
 import PublicLayout from '../components/layout/PublicLayout';
+import AdminLayout from '../components/layout/AdminLayout';
 
 // ==============================
 // PÚBLICO
@@ -91,74 +92,40 @@ function AppRouter() {
           />
         </Route>
 
-        <Route
-          path="/admin"
-          element={<Navigate to="/admin/dashboard" replace />}
-        />
-
-        <Route path="/admin/dashboard" element={<Dashboard />} />
-
-        <Route path="/admin/solicitudes" element={<Solicitudes />} />
-        <Route
-          path="/admin/solicitudes/:id"
-          element={<SolicitudDetalle />}
-        />
-
-        <Route path="/admin/agenda" element={<Agenda />} />
-        <Route path="/admin/espacios" element={<Espacios />} />
-        <Route path="/admin/campus" element={<Campus />} />
-        <Route path="/admin/contenidos" element={<Contenidos />} />
-        <Route path="/admin/tipos-espacio" element={<TiposEspacio />} />
-        <Route path="/admin/dependencias" element={<Dependencias />} />
-
-        <Route path="/admin/historial" element={<Historial />} />
-        <Route
-          path="/admin/historial/ceremonia/:id"
-          element={<FichaHistorica />}
-        />
-        <Route
-          path="/admin/historial/reserva/:id"
-          element={<FichaHistorica />}
-        />
-
-        <Route path="/admin/eventos" element={<Eventos />} />
-
-        <Route
-          path="/admin/eventos/ceremonias"
-          element={<CeremoniasListado />}
-        />
-        <Route
-          path="/admin/eventos/ceremonias/nueva"
-          element={<NuevaCeremonia />}
-        />
-        <Route
-          path="/admin/eventos/ceremonias/:id"
-          element={<DetalleCeremonia />}
-        />
-        <Route
-          path="/admin/eventos/ceremonias/:id/sesion/:sesionId"
-          element={<ConfigurarSesion />}
-        />
-        <Route
-          path="/admin/eventos/ceremonias/:id/graduandos"
-          element={<Graduandos />}
-        />
-        <Route
-          path="/admin/eventos/ceremonias/:id/graduandos/nuevo"
-          element={<GraduandoFormulario />}
-        />
-        <Route
-          path="/admin/eventos/ceremonias/:id/graduandos/:graduandoId"
-          element={<GraduandoDetalle />}
-        />
-        <Route
-          path="/admin/eventos/ceremonias/:id/invitados"
-          element={<Invitados />}
-        />
-        <Route
-          path="/admin/eventos/ceremonias/:id/control"
-          element={<ControlIngreso />}
-        />
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="solicitudes" element={<Solicitudes />} />
+          <Route path="solicitudes/:id" element={<SolicitudDetalle />} />
+          <Route path="agenda" element={<Agenda />} />
+          <Route path="espacios" element={<Espacios />} />
+          <Route path="campus" element={<Campus />} />
+          <Route path="contenidos" element={<Contenidos />} />
+          <Route path="tipos-espacio" element={<TiposEspacio />} />
+          <Route path="dependencias" element={<Dependencias />} />
+          <Route path="historial" element={<Historial />} />
+          <Route path="historial/ceremonia/:id" element={<FichaHistorica />} />
+          <Route path="historial/reserva/:id" element={<FichaHistorica />} />
+          <Route path="eventos" element={<Eventos />} />
+          <Route path="eventos/ceremonias" element={<CeremoniasListado />} />
+          <Route path="eventos/ceremonias/nueva" element={<NuevaCeremonia />} />
+          <Route path="eventos/ceremonias/:id" element={<DetalleCeremonia />} />
+          <Route
+            path="eventos/ceremonias/:id/sesion/:sesionId"
+            element={<ConfigurarSesion />}
+          />
+          <Route path="eventos/ceremonias/:id/graduandos" element={<Graduandos />} />
+          <Route
+            path="eventos/ceremonias/:id/graduandos/nuevo"
+            element={<GraduandoFormulario />}
+          />
+          <Route
+            path="eventos/ceremonias/:id/graduandos/:graduandoId"
+            element={<GraduandoDetalle />}
+          />
+          <Route path="eventos/ceremonias/:id/invitados" element={<Invitados />} />
+          <Route path="eventos/ceremonias/:id/control" element={<ControlIngreso />} />
+        </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

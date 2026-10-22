@@ -1,9 +1,4 @@
-/**
- * Servicio de Solicitudes.
- * Actualmente usa datos ficticios.
- * Preparado para reemplazar por llamadas Axios a la API real.
- */
-
+import { fetchBackend } from '../../../../../services/api';
 import type {
   Solicitud,
   SolicitudFilters,
@@ -11,196 +6,174 @@ import type {
   EstadoSolicitud,
 } from '../interfaces/solicitudes.interface';
 
-// Datos ficticios que reflejan exactamente el prototipo de Figma
-const MOCK_SOLICITUDES: Solicitud[] = [
-  {
-    id: '1',
-    codigo: 'SOL-001',
-    solicitante: 'Juan Pérez',
-    correo: 'juan.perez@cesmag.edu.co',
-    dependenciaProgramaGrupo: 'Facultad de Ingeniería · Ingeniería de Sistemas · Grupo A',
-    actividad: 'Jornada académica de integración',
-    espacio: 'Auditorio San Francisco',
-    tipoEspacio: 'Auditorio',
-    campus: 'Centro',
-    fecha: '2026-09-14',
-    fechaDisplay: '14/09/2026',
-    horario: '8:00 a. m. – 12:00 m.',
-    requisitos: 'Proyector, sonido y montaje de sillas',
-    asistentes: 180,
-    estado: 'Pendiente',
-    observaciones: 'Espacio solicitado sujeto a verificación de disponibilidad.',
-    fechaCreacion: '09 de septiembre de 2026 · 09:40 a. m.',
-    ultimaActualizacion: '09 de septiembre de 2026 · 10:35 a. m.',
-  },
-  {
-    id: '2',
-    codigo: 'SOL-002',
-    solicitante: 'María Gómez',
-    correo: 'maria.gomez@cesmag.edu.co',
-    dependenciaProgramaGrupo: 'Facultad de Educación · Licenciatura · Grupo B',
-    actividad: 'Taller de formación docente',
-    espacio: 'Aula de clase',
-    tipoEspacio: 'Aula de clase',
-    campus: 'Centro',
-    fecha: '2026-09-06',
-    fechaDisplay: '06/09/2026',
-    horario: '2:00 p. m. – 4:00 p. m.',
-    requisitos: 'Proyector',
-    asistentes: 35,
-    estado: 'Aprobada',
-    fechaCreacion: '01 de septiembre de 2026 · 11:00 a. m.',
-    ultimaActualizacion: '02 de septiembre de 2026 · 08:15 a. m.',
-  },
-  {
-    id: '3',
-    codigo: 'SOL-003',
-    solicitante: 'Carlos Ruiz',
-    correo: 'carlos.ruiz@cesmag.edu.co',
-    dependenciaProgramaGrupo: 'Facultad de Ciencias · Laboratorio · Grupo C',
-    actividad: 'Práctica de laboratorio',
-    espacio: 'Laboratorio',
-    tipoEspacio: 'Laboratorio',
-    campus: 'San Francisco',
-    fecha: '2026-09-04',
-    fechaDisplay: '04/09/2026',
-    horario: '9:00 a. m. – 11:00 a. m.',
-    requisitos: 'Equipos de laboratorio',
-    asistentes: 25,
-    estado: 'Activa',
-    fechaCreacion: '28 de agosto de 2026 · 14:20 p. m.',
-    ultimaActualizacion: '03 de septiembre de 2026 · 09:00 a. m.',
-  },
-  {
-    id: '4',
-    codigo: 'SOL-004',
-    solicitante: 'Ana Torres',
-    correo: 'ana.torres@cesmag.edu.co',
-    dependenciaProgramaGrupo: 'Rectoría · Eventos · N/A',
-    actividad: 'Reunión institucional',
-    espacio: 'Sala especial',
-    tipoEspacio: 'Sala especial',
-    campus: 'Centro',
-    fecha: '2026-09-01',
-    fechaDisplay: '01/09/2026',
-    horario: '1:00 p. m. – 3:00 p. m.',
-    requisitos: 'Sonido',
-    asistentes: 40,
-    estado: 'Rechazada',
-    observaciones: 'Espacio no disponible en la fecha solicitada.',
-    fechaCreacion: '25 de agosto de 2026 · 10:00 a. m.',
-    ultimaActualizacion: '26 de agosto de 2026 · 16:45 p. m.',
-  },
-  {
-    id: '5',
-    codigo: 'SOL-005',
-    solicitante: 'Laura Ruiz',
-    correo: 'laura.ruiz@cesmag.edu.co',
-    dependenciaProgramaGrupo: 'Facultad de Artes · Música · Grupo A',
-    actividad: 'Ensayo general',
-    espacio: 'Auditorio',
-    tipoEspacio: 'Auditorio',
-    campus: 'Centro',
-    fecha: '2026-08-28',
-    fechaDisplay: '28/08/2026',
-    horario: '7:00 a. m. – 10:00 a. m.',
-    requisitos: 'Montaje de sillas y sonido',
-    asistentes: 120,
-    estado: 'Cancelada',
-    observaciones: 'Cancelada por el solicitante.',
-    fechaCreacion: '20 de agosto de 2026 · 08:30 a. m.',
-    ultimaActualizacion: '27 de agosto de 2026 · 11:00 a. m.',
-  },
-];
-
-/**
- * Obtiene el listado de solicitudes.
- * En producción: return axios.get('/api/solicitudes', { params: filters })
- */
-export async function getSolicitudes(
-  filters?: SolicitudFilters
-): Promise<SolicitudListResponse> {
-  // Simula latencia de red
-  await new Promise((resolve) => setTimeout(resolve, 300));
-
-  let data = [...MOCK_SOLICITUDES];
-
-  if (filters) {
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      data = data.filter(
-        (s) =>
-          s.codigo.toLowerCase().includes(q) ||
-          s.solicitante.toLowerCase().includes(q)
-      );
-    }
-    if (filters.estado) {
-      data = data.filter((s) => s.estado === filters.estado);
-    }
-    if (filters.campus) {
-      data = data.filter((s) => s.campus === filters.campus);
-    }
-    if (filters.espacio) {
-      data = data.filter((s) =>
-        s.espacio.toLowerCase().includes(filters.espacio!.toLowerCase())
-      );
-    }
-    if (filters.fecha) {
-      data = data.filter((s) => s.fecha === filters.fecha);
-    }
-  }
-
-  return { data, total: data.length };
+interface SolicitudApi {
+  id: string;
+  codigo: string;
+  solicitante: string;
+  correo: string;
+  dependenciaProgramaGrupo: string;
+  actividad: string;
+  espacio: string;
+  tipoEspacio: string;
+  campus: string;
+  fecha: string;
+  fechaDisplay: string;
+  horaInicio: string;
+  horaFin: string;
+  requisitos: string;
+  asistentes: number | null;
+  estado: string;
+  observaciones: string;
+  motivoRechazo: string | null;
+  motivoCancelacion: string | null;
+  fechaCreacion: string;
+  ultimaActualizacion: string;
 }
 
-/**
- * Obtiene una solicitud por ID.
- * En producción: return axios.get(`/api/solicitudes/${id}`)
- */
-export async function getSolicitudById(id: string): Promise<Solicitud | null> {
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  return MOCK_SOLICITUDES.find((s) => s.id === id) ?? null;
+interface ApiError {
+  mensaje?: string;
 }
 
-/**
- * Actualiza el estado de una solicitud (Aprobar / Rechazar).
- * En producción: return axios.patch(`/api/solicitudes/${id}/estado`, { estado, observaciones })
- */
-export async function updateEstadoSolicitud(
-  id: string,
-  estado: EstadoSolicitud,
-  observaciones?: string
-): Promise<Solicitud | null> {
-  await new Promise((resolve) => setTimeout(resolve, 400));
-  const index = MOCK_SOLICITUDES.findIndex((s) => s.id === id);
-  if (index === -1) return null;
-
-  MOCK_SOLICITUDES[index] = {
-    ...MOCK_SOLICITUDES[index],
-    estado,
-    observaciones: observaciones ?? MOCK_SOLICITUDES[index].observaciones,
-    ultimaActualizacion: new Date().toLocaleString('es-CO', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    }),
-  };
-
-  return MOCK_SOLICITUDES[index];
+export interface ResultadoNotificacionCorreo {
+  enviado: boolean;
+  mensaje: string;
 }
 
-/** Listas auxiliares para filtros (preparadas para catálogos de API) */
-export const CAMPUS_OPTIONS = ['Centro', 'San Francisco'];
-export const ESTADO_OPTIONS: EstadoSolicitud[] = [
+export interface SolicitudActualizada {
+  solicitud: Solicitud;
+  notificacion: ResultadoNotificacionCorreo;
+}
+
+const estadosSolicitud: EstadoSolicitud[] = [
   'Pendiente',
   'Aprobada',
   'Activa',
   'Rechazada',
   'Cancelada',
 ];
+
+function esEstadoSolicitud(estado: string): estado is EstadoSolicitud {
+  return estadosSolicitud.some((opcion) => opcion === estado);
+}
+
+async function leerRespuesta<T>(respuesta: Response): Promise<T> {
+  const resultado = (await respuesta.json()) as T | ApiError;
+
+  if (!respuesta.ok) {
+    const mensaje =
+      resultado !== null &&
+      typeof resultado === 'object' &&
+      'mensaje' in resultado &&
+      typeof resultado.mensaje === 'string'
+        ? resultado.mensaje
+        : 'No fue posible completar la solicitud.';
+    throw new Error(mensaje);
+  }
+
+  return resultado as T;
+}
+
+function formatearHora(hora: string): string {
+  const [horas, minutos] = hora.split(':').map(Number);
+  if (!Number.isInteger(horas) || !Number.isInteger(minutos)) {
+    throw new Error('El servidor devolvió un horario inválido.');
+  }
+
+  return new Date(2000, 0, 1, horas, minutos).toLocaleTimeString('es-CO', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function convertirSolicitud(solicitud: SolicitudApi): Solicitud {
+  if (!esEstadoSolicitud(solicitud.estado)) {
+    throw new Error(`El servidor devolvió un estado desconocido: ${solicitud.estado}`);
+  }
+
+  return {
+    id: solicitud.id,
+    codigo: solicitud.codigo,
+    solicitante: solicitud.solicitante,
+    correo: solicitud.correo,
+    dependenciaProgramaGrupo: solicitud.dependenciaProgramaGrupo,
+    actividad: solicitud.actividad,
+    espacio: solicitud.espacio,
+    tipoEspacio: solicitud.tipoEspacio,
+    campus: solicitud.campus,
+    fecha: solicitud.fecha,
+    fechaDisplay: solicitud.fechaDisplay,
+    horario: `${formatearHora(solicitud.horaInicio)} – ${formatearHora(solicitud.horaFin)}`,
+    requisitos: solicitud.requisitos,
+    asistentes: solicitud.asistentes,
+    estado: solicitud.estado,
+    observaciones: solicitud.observaciones,
+    motivoRechazo: solicitud.motivoRechazo,
+    motivoCancelacion: solicitud.motivoCancelacion,
+    fechaCreacion: solicitud.fechaCreacion,
+    ultimaActualizacion: solicitud.ultimaActualizacion,
+  };
+}
+
+function crearParametrosFiltros(filters?: SolicitudFilters): string {
+  const parametros = new URLSearchParams();
+  if (filters?.search) parametros.set('search', filters.search);
+  if (filters?.estado) parametros.set('estado', filters.estado);
+  if (filters?.campus) parametros.set('campus', filters.campus);
+  if (filters?.fecha) parametros.set('fecha', filters.fecha);
+  if (filters?.espacio) parametros.set('espacio', filters.espacio);
+  return parametros.toString();
+}
+
+export async function getSolicitudes(
+  filters?: SolicitudFilters,
+): Promise<SolicitudListResponse> {
+  const query = crearParametrosFiltros(filters);
+  const respuesta = await fetchBackend(`/api/solicitudes${query ? `?${query}` : ''}`);
+  const resultado = await leerRespuesta<{ data: SolicitudApi[]; total: number }>(
+    respuesta,
+  );
+
+  return {
+    data: resultado.data.map(convertirSolicitud),
+    total: resultado.total,
+  };
+}
+
+export async function getSolicitudById(id: string): Promise<Solicitud | null> {
+  const respuesta = await fetchBackend(`/api/solicitudes/${encodeURIComponent(id)}`);
+  if (respuesta.status === 404) return null;
+
+  const resultado = await leerRespuesta<SolicitudApi>(respuesta);
+  return convertirSolicitud(resultado);
+}
+
+export async function updateEstadoSolicitud(
+  id: string,
+  estado: EstadoSolicitud,
+  motivo?: string,
+): Promise<SolicitudActualizada | null> {
+  const respuesta = await fetchBackend(
+    `/api/solicitudes/${encodeURIComponent(id)}/estado`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estado, motivo }),
+    },
+  );
+  if (respuesta.status === 404) return null;
+
+  const resultado = await leerRespuesta<{
+    solicitud: SolicitudApi;
+    notificacion: ResultadoNotificacionCorreo;
+  }>(respuesta);
+  return {
+    solicitud: convertirSolicitud(resultado.solicitud),
+    notificacion: resultado.notificacion,
+  };
+}
+
+export const ESTADO_OPTIONS: EstadoSolicitud[] = estadosSolicitud;
+export const CAMPUS_OPTIONS = ['Centro', 'San Francisco'];
 export const ESPACIO_OPTIONS = [
   'Auditorio',
   'Aula de clase',

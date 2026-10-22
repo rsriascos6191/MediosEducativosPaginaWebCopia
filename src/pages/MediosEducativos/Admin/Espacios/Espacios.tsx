@@ -13,13 +13,12 @@ import {
   Card,
   CardContent,
   Chip,
+  Alert,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import type { Espacio, EspacioFilters } from './interfaces/espacios.interface';
-import {
-  getEspacios,
-  TIPO_ESPACIO_OPTIONS,
-} from './services/espacios.service';
+import { getEspacios } from './services/espacios.service';
+import { obtenerTiposEspacio } from '../../../../services/api';
 
 const estadoStyles: Record<
   string,
@@ -33,24 +32,55 @@ const estadoStyles: Record<
 export default function Espacios() {
   const [espacios, setEspacios] = useState<Espacio[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [tiposEspacio, setTiposEspacio] = useState<string[]>([]);
   const [nombre, setNombre] = useState('');
   const [tipo, setTipo] = useState('');
 
   const load = useCallback(async (filters?: EspacioFilters) => {
-    setLoading(true);
     try {
       const res = await getEspacios(filters);
       setEspacios(res.data);
+    } catch (loadError: unknown) {
+      setError(loadError instanceof Error ? loadError.message : 'No fue posible cargar los espacios.');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let activo = true;
+    getEspacios()
+      .then((res) => {
+        if (activo) setEspacios(res.data);
+      })
+      .catch((loadError: unknown) => {
+        if (activo) {
+          setError(loadError instanceof Error ? loadError.message : 'No fue posible cargar los espacios.');
+        }
+      })
+      .finally(() => {
+        if (activo) setLoading(false);
+      });
+
+    obtenerTiposEspacio()
+      .then((tipos) => {
+        if (activo) setTiposEspacio(tipos.map((item) => item.nombre));
+      })
+      .catch((loadError: unknown) => {
+        if (activo) {
+          setError(loadError instanceof Error ? loadError.message : 'No fue posible cargar los tipos de espacio.');
+        }
+      });
+
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   const handleBuscar = () => {
+    setLoading(true);
+    setError('');
     load({
       nombre: nombre || undefined,
       tipo: tipo || undefined,
@@ -105,6 +135,8 @@ export default function Espacios() {
         </Button>
       </Box>
 
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
       {/* Barra de búsqueda */}
       <Box
         sx={{
@@ -153,7 +185,7 @@ export default function Espacios() {
           }}
         >
           <MenuItem value="">Todos</MenuItem>
-          {TIPO_ESPACIO_OPTIONS.map((t) => (
+          {tiposEspacio.map((t) => (
             <MenuItem key={t} value={t}>
               {t}
             </MenuItem>
@@ -210,7 +242,9 @@ export default function Espacios() {
               <Box
                 sx={{
                   height: 140,
-                  background: e.imagenGradient || '#0B3A5C',
+                  background: e.imagen
+                    ? `linear-gradient(0deg, rgba(0,0,0,0.45), transparent), url("${e.imagen}") center/cover`
+                    : e.imagenGradient || '#0B3A5C',
                   display: 'flex',
                   alignItems: 'flex-end',
                   p: 2,

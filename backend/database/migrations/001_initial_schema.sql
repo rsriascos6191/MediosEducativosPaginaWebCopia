@@ -111,6 +111,7 @@ CREATE TABLE solicitud_reserva (
     nombre_actividad VARCHAR(255) NOT NULL,
     requerimientos TEXT,
     estado VARCHAR(50) NOT NULL,
+    motivo_rechazo TEXT,
     motivo_cancelacion TEXT,
     id_admin_gestion INTEGER,
 
@@ -210,6 +211,7 @@ CREATE TABLE sesion_programa (
 CREATE TABLE graduando (
     id_graduando INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     id_ceremonia INTEGER NOT NULL,
+    id_sesion INTEGER,
     nombres VARCHAR(150) NOT NULL,
     apellidos VARCHAR(150) NOT NULL,
     identificacion VARCHAR(50) NOT NULL,
@@ -222,7 +224,11 @@ CREATE TABLE graduando (
     estado BOOLEAN NOT NULL DEFAULT TRUE,
 
     CONSTRAINT fk_graduando_ceremonia
-        FOREIGN KEY (id_ceremonia) REFERENCES ceremonia_grado(id_ceremonia)
+        FOREIGN KEY (id_ceremonia) REFERENCES ceremonia_grado(id_ceremonia),
+
+    CONSTRAINT fk_graduando_sesion
+        FOREIGN KEY (id_sesion) REFERENCES sesion(id_sesion)
+        ON DELETE SET NULL
 );
 
 CREATE TABLE graduando_programa (

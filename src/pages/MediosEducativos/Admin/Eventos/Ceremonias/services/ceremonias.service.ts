@@ -1,6 +1,6 @@
 /**
  * Servicio de Ceremonias de grado.
- * Datos ficticios del prototipo. Listo para Axios.
+ * Integración con el backend de ceremonias.
  */
 
 import type {
@@ -10,376 +10,352 @@ import type {
   Invitado,
   CeremoniaFilters,
   GraduandoFilters,
-  EstadoCeremonia,
-  EstadoSesion,
-  EstadoAutorizacion,
+  GraduandoPayload,
+  NuevaCeremonia,
+  ProgramaOption,
+  EstadisticasControlIngreso,
+  ResultadoRegistroIngreso,
 } from '../interfaces/ceremonias.interface';
+import type {
+  ImportGraduandoRow,
+  ImportGraduandosPreview,
+  ImportGraduandosResult,
+} from '../importGraduandos.config';
+import { fetchBackend } from '../../../../../../services/api';
 
-const MOCK_CEREMONIAS: Ceremonia[] = [
-  {
-    id: '1',
-    codigo: 'CER-025',
-    nombre: 'Ceremonia de grados — Ejemplo 01',
-    fecha: '15/09/2026',
-    fechaISO: '2026-09-15',
-    lugar: 'Lugar correspondiente',
-    campus: 'Campus Centro',
-    sesiones: 3,
-    graduandos: 180,
-    invitados: 342,
-    estado: 'Programada',
-  },
-  {
-    id: '2',
-    codigo: 'CER-026',
-    nombre: 'Ceremonia de grados — Ejemplo 02',
-    fecha: '20/09/2026',
-    fechaISO: '2026-09-20',
-    lugar: 'Lugar correspondiente',
-    campus: 'Campus Centro',
-    sesiones: 2,
-    graduandos: 120,
-    invitados: 280,
-    estado: 'En curso',
-  },
-  {
-    id: '3',
-    codigo: 'CER-027',
-    nombre: 'Ceremonia de grados — Ejemplo 03',
-    fecha: '24/09/2026',
-    fechaISO: '2026-09-24',
-    lugar: 'Lugar correspondiente',
-    campus: 'Campus Centro',
-    sesiones: 4,
-    graduandos: 210,
-    invitados: 400,
-    estado: 'Finalizada',
-  },
-];
-
-const MOCK_SESIONES: Sesion[] = [
-  {
-    id: 's1',
-    ceremoniaId: '1',
-    nombre: 'Sesión 1',
-    estado: 'Pendiente',
-    programas: [],
-    graduandosCount: 0,
-  },
-  {
-    id: 's2',
-    ceremoniaId: '1',
-    nombre: 'Sesión 2',
-    estado: 'Pendiente',
-    programas: [],
-    graduandosCount: 0,
-  },
-];
-
-const MOCK_GRADUANDOS: Graduando[] = [
-  {
-    id: 'g1',
-    ceremoniaId: '1',
-    sesionId: 's1',
-    nombres: 'Laura',
-    apellidos: 'Gómez',
-    documento: '10000001',
-    programa: 'Ingeniería de Sistemas',
-    sesionLabel: 'Sesión 1 · 9:00 a. m.',
-    invitadosCount: 3,
-    codigoEstudiantil: 'No registrado',
-  },
-  {
-    id: 'g2',
-    ceremoniaId: '1',
-    sesionId: 's1',
-    nombres: 'Carlos',
-    apellidos: 'Ruiz',
-    documento: '10000002',
-    programa: 'Ingeniería de Sistemas',
-    sesionLabel: 'Sesión 1 · 9:00 a. m.',
-    invitadosCount: 2,
-  },
-  {
-    id: 'g3',
-    ceremoniaId: '1',
-    sesionId: 's2',
-    nombres: 'Ana',
-    apellidos: 'Torres',
-    documento: '10000003',
-    programa: 'Ingeniería de Sistemas',
-    sesionLabel: 'Sesión 2 · 12:00 p. m.',
-    invitadosCount: 0,
-  },
-  {
-    id: 'g4',
-    ceremoniaId: '1',
-    sesionId: 's2',
-    nombres: 'Juan',
-    apellidos: 'Pérez',
-    documento: '10000004',
-    programa: 'Ingeniería de Sistemas',
-    sesionLabel: 'Sesión 2 · 12:00 p. m.',
-    invitadosCount: 1,
-  },
-  {
-    id: 'g5',
-    ceremoniaId: '1',
-    sesionId: 's1',
-    nombres: 'María',
-    apellidos: 'López',
-    documento: '10000005',
-    programa: 'Ingeniería de Sistemas',
-    sesionLabel: 'Sesión 3 · 4:00 p. m.',
-    invitadosCount: 3,
-  },
-];
-
-const MOCK_INVITADOS: Invitado[] = [
-  {
-    id: 'i1',
-    graduandoId: 'g1',
-    ceremoniaId: '1',
-    nombre: 'Pedro Gómez',
-    documento: '100123',
-    graduandoNombre: 'Laura Gómez',
-    tipo: 'Familiar',
-    autorizacion: 'Autorizado',
-    estadoIngreso: 'Pendiente',
-  },
-  {
-    id: 'i2',
-    graduandoId: 'g1',
-    ceremoniaId: '1',
-    nombre: 'María Ruiz',
-    documento: '100456',
-    graduandoNombre: 'Laura Gómez',
-    tipo: 'Familiar',
-    autorizacion: 'Autorizado',
-    estadoIngreso: 'Ingresó',
-    horaIngreso: '7:48 a. m.',
-  },
-  {
-    id: 'i3',
-    graduandoId: 'g2',
-    ceremoniaId: '1',
-    nombre: 'Carlos Pérez',
-    documento: '100789',
-    graduandoNombre: 'Carlos Ruiz',
-    tipo: 'Invitado',
-    autorizacion: 'Pendiente',
-    estadoIngreso: 'Pendiente',
-  },
-  {
-    id: 'i4',
-    graduandoId: 'g2',
-    ceremoniaId: '1',
-    nombre: 'Ana Torres',
-    documento: '101012',
-    graduandoNombre: 'Carlos Ruiz',
-    tipo: 'Familiar',
-    autorizacion: 'Autorizado',
-    estadoIngreso: 'Pendiente',
-  },
-  {
-    id: 'i5',
-    graduandoId: 'g3',
-    ceremoniaId: '1',
-    nombre: 'Juan López',
-    documento: '101345',
-    graduandoNombre: 'Ana Torres',
-    tipo: 'Invitado',
-    autorizacion: 'Pendiente',
-    estadoIngreso: 'Pendiente',
-  },
-];
+async function respuestaCeremonia<T extends object>(respuesta: Response): Promise<T> {
+  const tipoContenido = respuesta.headers.get('content-type') || '';
+  if (!tipoContenido.toLowerCase().includes('json')) {
+    if (respuesta.status === 404) {
+      throw new Error(
+        'El backend no reconoce esta ruta. Reinícialo desde la carpeta backend para cargar las rutas actuales.'
+      );
+    }
+    throw new Error(`El backend devolvió una respuesta que no es JSON (HTTP ${respuesta.status}).`);
+  }
+  const resultado = (await respuesta.json()) as T & { mensaje?: string };
+  if (!respuesta.ok) {
+    throw new Error(
+      'mensaje' in resultado && resultado.mensaje
+        ? resultado.mensaje
+        : 'No fue posible consultar las ceremonias.'
+    );
+  }
+  return resultado as T;
+}
 
 export async function getCeremonias(
   filters?: CeremoniaFilters
 ): Promise<{ data: Ceremonia[]; total: number }> {
-  await new Promise((r) => setTimeout(r, 220));
-  let data = [...MOCK_CEREMONIAS];
-  if (filters?.nombre) {
-    const q = filters.nombre.toLowerCase();
-    data = data.filter((c) => c.nombre.toLowerCase().includes(q));
-  }
+  const parametros = new URLSearchParams();
+  if (filters?.nombre?.trim()) parametros.set('nombre', filters.nombre.trim());
+  if (filters?.fecha) parametros.set('fecha', filters.fecha);
   if (filters?.estado && filters.estado !== 'Todos') {
-    data = data.filter((c) => c.estado === filters.estado);
+    parametros.set('estado', filters.estado);
   }
-  if (filters?.fecha) {
-    data = data.filter((c) => c.fechaISO === filters.fecha);
-  }
-  return { data, total: data.length };
+  const query = parametros.size ? `?${parametros.toString()}` : '';
+  const respuesta = await fetchBackend(`/api/ceremonias${query}`);
+  return respuestaCeremonia<{ data: Ceremonia[]; total: number }>(respuesta);
 }
 
 export async function getCeremoniaById(id: string): Promise<Ceremonia | null> {
-  await new Promise((r) => setTimeout(r, 150));
-  return MOCK_CEREMONIAS.find((c) => c.id === id) ?? null;
+  const respuesta = await fetchBackend(`/api/ceremonias/${encodeURIComponent(id)}`);
+  if (respuesta.status === 404) return null;
+  return respuestaCeremonia<Ceremonia>(respuesta);
+}
+
+export interface EventoOption {
+  id_evento: number;
+  tipo_evento: string;
+}
+
+export interface EspacioOption {
+  id_espacio: number;
+  nombre: string;
+  campus: string;
+}
+
+export async function getEventosActivos(): Promise<EventoOption[]> {
+  const respuesta = await fetchBackend('/api/eventos');
+  return respuestaCeremonia<EventoOption[]>(respuesta);
+}
+
+export async function getEspaciosActivos(): Promise<EspacioOption[]> {
+  const respuesta = await fetchBackend('/api/espacios');
+  return respuestaCeremonia<EspacioOption[]>(respuesta);
 }
 
 export async function createCeremonia(
-  payload: Partial<Ceremonia>
+  payload: NuevaCeremonia
 ): Promise<Ceremonia> {
-  await new Promise((r) => setTimeout(r, 300));
-  const nueva: Ceremonia = {
-    id: String(Date.now()),
-    codigo: `CER-${String(MOCK_CEREMONIAS.length + 28).padStart(3, '0')}`,
-    nombre: payload.nombre || 'Nueva ceremonia',
-    fecha: payload.fecha || '',
-    fechaISO: payload.fechaISO || '',
-    lugar: payload.lugar || '',
-    sesiones: 0,
-    graduandos: 0,
-    invitados: 0,
-    estado: (payload.estado as EstadoCeremonia) || 'Programada',
-  };
-  MOCK_CEREMONIAS.push(nueva);
-  return nueva;
+  const respuesta = await fetchBackend('/api/ceremonias', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return respuestaCeremonia<Ceremonia>(respuesta);
 }
 
 export async function getSesiones(ceremoniaId: string): Promise<Sesion[]> {
-  await new Promise((r) => setTimeout(r, 150));
-  return MOCK_SESIONES.filter((s) => s.ceremoniaId === ceremoniaId);
+  const respuesta = await fetchBackend(
+    `/api/ceremonias/${encodeURIComponent(ceremoniaId)}/sesiones`
+  );
+  return respuestaCeremonia<Sesion[]>(respuesta);
 }
 
 export async function getSesionById(id: string): Promise<Sesion | null> {
-  await new Promise((r) => setTimeout(r, 120));
-  return MOCK_SESIONES.find((s) => s.id === id) ?? null;
+  const respuesta = await fetchBackend(`/api/sesiones/${encodeURIComponent(id)}`);
+  if (respuesta.status === 404) return null;
+  return respuestaCeremonia<Sesion>(respuesta);
 }
 
 export async function addSesion(
   ceremoniaId: string,
   payload: Partial<Sesion>
 ): Promise<Sesion> {
-  await new Promise((r) => setTimeout(r, 250));
-  const nueva: Sesion = {
-    id: `s${Date.now()}`,
-    ceremoniaId,
-    nombre: payload.nombre || `Sesión ${MOCK_SESIONES.filter((s) => s.ceremoniaId === ceremoniaId).length + 1}`,
-    estado: (payload.estado as EstadoSesion) || 'Pendiente',
-    horaInicio: payload.horaInicio,
-    horaFin: payload.horaFin,
-    programas: payload.programas || [],
-    graduandosCount: 0,
-  };
-  MOCK_SESIONES.push(nueva);
-  return nueva;
+  const respuesta = await fetchBackend(
+    `/api/ceremonias/${encodeURIComponent(ceremoniaId)}/sesiones`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  );
+  return respuestaCeremonia<Sesion>(respuesta);
+}
+
+export async function updateSesion(
+  id: string,
+  payload: Pick<Sesion, 'nombre' | 'estado' | 'horaInicio' | 'horaFin' | 'programas'>
+): Promise<Sesion> {
+  const respuesta = await fetchBackend(`/api/sesiones/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return respuestaCeremonia<Sesion>(respuesta);
+}
+
+export async function getProgramasActivos(): Promise<string[]> {
+  const programas = await getProgramasCatalogo();
+  return programas.filter((programa) => programa.estado).map((programa) => programa.nombre);
+}
+
+export async function getProgramasCatalogo(): Promise<ProgramaOption[]> {
+  const respuesta = await fetchBackend('/api/programas');
+  return respuestaCeremonia<ProgramaOption[]>(respuesta);
 }
 
 export async function getGraduandos(
   ceremoniaId: string,
   filters?: GraduandoFilters
 ): Promise<{ data: Graduando[]; total: number; stats: { total: number; revisados: number; errores: number } }> {
-  await new Promise((r) => setTimeout(r, 200));
-  let data = MOCK_GRADUANDOS.filter((g) => g.ceremoniaId === ceremoniaId);
-  if (filters?.search) {
-    const q = filters.search.toLowerCase();
-    data = data.filter(
-      (g) =>
-        `${g.nombres} ${g.apellidos}`.toLowerCase().includes(q) ||
-        g.documento.includes(q)
-    );
+  const parametros = new URLSearchParams();
+  if (filters?.search?.trim()) parametros.set('search', filters.search.trim());
+  if (filters?.sesion && filters.sesion !== 'Todas las sesiones') {
+    parametros.set('sesion', filters.sesion);
   }
   if (filters?.programa && filters.programa !== 'Todos los programas') {
-    data = data.filter((g) => g.programa === filters.programa);
+    parametros.set('programa', filters.programa);
   }
-  return {
-    data,
-    total: data.length,
-    stats: { total: 120, revisados: 120, errores: 2 },
-  };
+  const query = parametros.size ? `?${parametros.toString()}` : '';
+  const respuesta = await fetchBackend(
+    `/api/ceremonias/${encodeURIComponent(ceremoniaId)}/graduandos${query}`
+  );
+  return respuestaCeremonia<{
+    data: Graduando[];
+    total: number;
+    stats: { total: number; revisados: number; errores: number };
+  }>(respuesta);
 }
 
 export async function getGraduandoById(id: string): Promise<Graduando | null> {
-  await new Promise((r) => setTimeout(r, 120));
-  return MOCK_GRADUANDOS.find((g) => g.id === id) ?? null;
+  const respuesta = await fetchBackend(`/api/graduandos/${encodeURIComponent(id)}`);
+  if (respuesta.status === 404) return null;
+  return respuestaCeremonia<Graduando>(respuesta);
 }
 
-/** Busca graduando por cédula (documento). Listo para API real. */
+export async function createGraduando(
+  ceremoniaId: string,
+  payload: GraduandoPayload
+): Promise<Graduando> {
+  const respuesta = await fetchBackend(
+    `/api/ceremonias/${encodeURIComponent(ceremoniaId)}/graduandos`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  );
+  return respuestaCeremonia<Graduando>(respuesta);
+}
+
+export async function previewImportGraduandos(
+  ceremoniaId: string,
+  filas: ImportGraduandoRow[],
+): Promise<ImportGraduandosPreview> {
+  const respuesta = await fetchBackend(
+    `/api/ceremonias/${encodeURIComponent(ceremoniaId)}/graduandos/importacion/validar`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filas }),
+    },
+  );
+  return respuestaCeremonia<ImportGraduandosPreview>(respuesta);
+}
+
+export async function importGraduandos(
+  ceremoniaId: string,
+  filas: ImportGraduandoRow[],
+): Promise<ImportGraduandosResult> {
+  const respuesta = await fetchBackend(
+    `/api/ceremonias/${encodeURIComponent(ceremoniaId)}/graduandos/importacion/confirmar`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filas }),
+    },
+  );
+  return respuestaCeremonia<ImportGraduandosResult>(respuesta);
+}
+
+export async function updateGraduando(
+  id: string,
+  payload: GraduandoPayload
+): Promise<Graduando> {
+  const respuesta = await fetchBackend(`/api/graduandos/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return respuestaCeremonia<Graduando>(respuesta);
+}
+
+/** Busca graduando por documento para el formulario público de invitados. */
 export async function getGraduandoByDocumento(
   documento: string
 ): Promise<Graduando | null> {
-  await new Promise((r) => setTimeout(r, 120));
-  const doc = documento.trim();
-  const found = MOCK_GRADUANDOS.find((g) => g.documento === doc);
-  if (found) return found;
-  // Fallback de prueba: cédula válida → perfil demo para el formulario público
-  if (doc.length >= 6) {
-    return {
-      id: `g-demo-${doc}`,
-      ceremoniaId: '1',
-      sesionId: 's1',
-      nombres: 'Graduando',
-      apellidos: 'Demo',
-      documento: doc,
-      codigoEstudiantil:
-        (typeof localStorage !== 'undefined' &&
-          localStorage.getItem('me_graduando_codigo')) ||
-        '0000',
-      programa: 'Ingeniería de Sistemas',
-      sesionLabel: 'Sesión 1',
-      invitadosCount: 0,
-    };
-  }
-  return null;
+  const respuesta = await fetchBackend(
+    `/api/graduandos/documento/${encodeURIComponent(documento)}`
+  );
+  if (respuesta.status === 404) return null;
+  return respuestaCeremonia<Graduando>(respuesta);
 }
 
 export async function getInvitados(
   ceremoniaId: string,
   graduandoId?: string
 ): Promise<Invitado[]> {
-  await new Promise((r) => setTimeout(r, 150));
-  let data = MOCK_INVITADOS.filter((i) => i.ceremoniaId === ceremoniaId);
-  if (graduandoId) {
-    data = data.filter((i) => i.graduandoId === graduandoId);
-  }
-  return data;
+  const parametros = new URLSearchParams();
+  if (graduandoId) parametros.set('graduandoId', graduandoId);
+  const queryString = parametros.toString();
+  const query = queryString ? `?${queryString}` : '';
+  const respuesta = await fetchBackend(
+    `/api/ceremonias/${encodeURIComponent(ceremoniaId)}/invitados${query}`
+  );
+  return respuestaCeremonia<Invitado[]>(respuesta);
+}
+
+export async function getEstadisticasControlIngreso(
+  ceremoniaId: string,
+  sesionId: string
+): Promise<EstadisticasControlIngreso> {
+  const parametros = new URLSearchParams({ sesion: sesionId });
+  const respuesta = await fetchBackend(
+    `/api/ceremonias/${encodeURIComponent(ceremoniaId)}/control-ingreso?${parametros.toString()}`
+  );
+  return respuestaCeremonia<EstadisticasControlIngreso>(respuesta);
+}
+
+export async function buscarGraduandosControlIngreso(
+  ceremoniaId: string,
+  sesionId: string,
+  search: string
+): Promise<Graduando[]> {
+  const parametros = new URLSearchParams({ sesion: sesionId, search });
+  const respuesta = await fetchBackend(
+    `/api/ceremonias/${encodeURIComponent(ceremoniaId)}/control-ingreso/graduandos?${parametros.toString()}`
+  );
+  return respuestaCeremonia<Graduando[]>(respuesta);
+}
+
+export async function getInvitadosControlIngreso(
+  ceremoniaId: string,
+  sesionId: string,
+  graduandoId: string
+): Promise<Invitado[]> {
+  const parametros = new URLSearchParams({ sesion: sesionId });
+  const respuesta = await fetchBackend(
+    `/api/ceremonias/${encodeURIComponent(ceremoniaId)}/control-ingreso/graduandos/${encodeURIComponent(graduandoId)}/invitados?${parametros.toString()}`
+  );
+  return respuestaCeremonia<Invitado[]>(respuesta);
 }
 
 export async function updateInvitado(
   id: string,
   payload: Partial<Invitado>
 ): Promise<Invitado | null> {
-  await new Promise((r) => setTimeout(r, 200));
-  const idx = MOCK_INVITADOS.findIndex((i) => i.id === id);
-  if (idx === -1) return null;
-  MOCK_INVITADOS[idx] = { ...MOCK_INVITADOS[idx], ...payload };
-  return MOCK_INVITADOS[idx];
+  const respuesta = await fetchBackend(`/api/invitados/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (respuesta.status === 404) return null;
+  return respuestaCeremonia<Invitado>(respuesta);
 }
 
 export async function addInvitado(
-  payload: Omit<Invitado, 'id'>
+  payload: Pick<Invitado, 'graduandoId' | 'nombre' | 'documento' | 'autorizacion'> &
+    Partial<Pick<
+      Invitado,
+      'ceremoniaId' | 'graduandoNombre' | 'tipo' | 'telefono' | 'parentesco' | 'estadoIngreso' | 'horaIngreso'
+    >>
 ): Promise<Invitado> {
-  await new Promise((r) => setTimeout(r, 200));
-  const nuevo: Invitado = { ...payload, id: `i${Date.now()}` };
-  MOCK_INVITADOS.push(nuevo);
-  const gIdx = MOCK_GRADUANDOS.findIndex((g) => g.id === payload.graduandoId);
-  if (gIdx !== -1) {
-    MOCK_GRADUANDOS[gIdx] = {
-      ...MOCK_GRADUANDOS[gIdx],
-      invitadosCount: (MOCK_GRADUANDOS[gIdx].invitadosCount || 0) + 1,
-    };
-  }
-  return nuevo;
+  const respuesta = await fetchBackend(
+    `/api/graduandos/${encodeURIComponent(payload.graduandoId)}/invitados`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: payload.nombre,
+        documento: payload.documento,
+        autorizacion: payload.autorizacion,
+      }),
+    }
+  );
+  return respuestaCeremonia<Invitado>(respuesta);
 }
 
 export async function registrarIngreso(
-  invitadoId: string
-): Promise<Invitado | null> {
-  await new Promise((r) => setTimeout(r, 200));
-  const idx = MOCK_INVITADOS.findIndex((i) => i.id === invitadoId);
-  if (idx === -1) return null;
-  const hora = new Date().toLocaleTimeString('es-CO', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-  MOCK_INVITADOS[idx] = {
-    ...MOCK_INVITADOS[idx],
-    estadoIngreso: 'Ingresó',
-    horaIngreso: hora,
-  };
-  return MOCK_INVITADOS[idx];
+  invitadoId: string,
+  sesionId: string
+): Promise<ResultadoRegistroIngreso> {
+  const respuesta = await fetchBackend(
+    `/api/invitados/${encodeURIComponent(invitadoId)}/ingreso`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id_sesion: Number(sesionId) }),
+    }
+  );
+  return respuestaCeremonia<ResultadoRegistroIngreso>(respuesta);
+}
+
+export async function registrarIngresoGraduando(
+  ceremoniaId: string,
+  graduandoId: string,
+  sesionId: string
+): Promise<ResultadoRegistroIngreso> {
+  const respuesta = await fetchBackend(
+    `/api/ceremonias/${encodeURIComponent(ceremoniaId)}/graduandos/${encodeURIComponent(graduandoId)}/ingreso`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id_sesion: Number(sesionId) }),
+    }
+  );
+  return respuestaCeremonia<ResultadoRegistroIngreso>(respuesta);
 }
 
 export const ESTADO_CEREMONIA_OPTIONS = ['Todos', 'Programada', 'En curso', 'Finalizada'];

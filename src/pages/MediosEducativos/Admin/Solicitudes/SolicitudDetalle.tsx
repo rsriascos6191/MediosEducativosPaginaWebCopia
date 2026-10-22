@@ -1,7 +1,7 @@
 /**
  * Pantalla: Detalle de solicitud
  * Diseño 1:1 del prototipo de Figma.
- * Acciones Aprobar / Rechazar preparadas para futuro enlace a API.
+ * Las acciones de aprobación y rechazo se gestionan mediante la API.
  */
 
 import { useState, useEffect } from 'react';
@@ -14,14 +14,18 @@ import {
   TextField,
   CircularProgress,
   Divider,
+  Alert,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import Swal from 'sweetalert2';
 import type { Solicitud, EstadoSolicitud } from './interfaces/solicitudes.interface';
+import ModalMotivo from './components/ModalMotivo';
 import {
   getSolicitudById,
   updateEstadoSolicitud,
 } from './services/solicitudes.service';
+
+type EstadoConMotivo = 'Rechazada' | 'Cancelada';
 
 const estadoColor: Record<
   EstadoSolicitud,
@@ -39,62 +43,87 @@ export default function SolicitudDetalle() {
   const navigate = useNavigate();
   const [solicitud, setSolicitud] = useState<Solicitud | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [accionConMotivo, setAccionConMotivo] = useState<EstadoConMotivo | null>(null);
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
+    setLoadError('');
     getSolicitudById(id)
       .then((data) => {
         setSolicitud(data);
         if (data?.observaciones) setObservaciones(data.observaciones);
       })
+      .catch((error: unknown) => {
+        console.error('Error al cargar la solicitud:', error);
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : 'No fue posible cargar la solicitud.',
+        );
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
-  const handleUpdateEstado = async (nuevoEstado: EstadoSolicitud) => {
-    if (!solicitud) return;
-
-    const result = await Swal.fire({
-      title: nuevoEstado === 'Aprobada' ? '¿Aprobar solicitud?' : '¿Rechazar solicitud?',
-      text:
-        nuevoEstado === 'Aprobada'
-          ? 'La solicitud pasará a estado Aprobada.'
-          : 'La solicitud será rechazada.',
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: nuevoEstado === 'Aprobada' ? '#E30613' : '#0B3A5C',
-      cancelButtonColor: '#9AA5B5',
-      confirmButtonText: nuevoEstado === 'Aprobada' ? 'Sí, aprobar' : 'Sí, rechazar',
-      cancelButtonText: 'Cancelar',
-    });
-
-    if (!result.isConfirmed) return;
-
+  const guardarEstado = async (
+    nuevoEstado: EstadoSolicitud,
+    motivo?: string,
+  ): Promise<boolean> => {
+    if (!solicitud) return false;
     setUpdating(true);
     try {
       const updated = await updateEstadoSolicitud(
         solicitud.id,
         nuevoEstado,
-        observaciones
+        motivo,
       );
-      if (updated) {
-        setSolicitud(updated);
-        await Swal.fire({
-          icon: 'success',
-          title: 'Estado actualizado',
-          text: `La solicitud ahora está ${nuevoEstado.toLowerCase()}.`,
-          timer: 2000,
-          showConfirmButton: false,
-        });
+      if (!updated) {
+        throw new Error('No se encontró la solicitud para actualizar.');
       }
+      setSolicitud(updated.solicitud);
+      await Swal.fire({
+        icon: updated.notificacion.enviado ? 'success' : 'warning',
+        title: updated.notificacion.enviado
+          ? 'Estado actualizado y correo enviado'
+          : 'Estado actualizado; correo no enviado',
+        text: updated.notificacion.mensaje,
+        timer: updated.notificacion.enviado ? 2500 : undefined,
+        showConfirmButton: !updated.notificacion.enviado,
+      });
+      return true;
     } catch (error) {
       console.error(error);
-      Swal.fire('Error', 'No se pudo actualizar el estado.', 'error');
+      await Swal.fire(
+        'Error',
+        error instanceof Error ? error.message : 'No se pudo actualizar el estado.',
+        'error',
+      );
+      return false;
     } finally {
       setUpdating(false);
     }
+  };
+
+  const handleAprobar = async () => {
+    const result = await Swal.fire({
+      title: '¿Aprobar solicitud?',
+      text: 'La solicitud pasará a estado Aprobada.',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#E30613',
+      cancelButtonColor: '#9AA5B5',
+      confirmButtonText: 'Sí, aprobar',
+      cancelButtonText: 'Cancelar',
+    });
+    if (result.isConfirmed) await guardarEstado('Aprobada');
+  };
+
+  const handleConfirmarMotivo = (motivo: string) => {
+    if (!accionConMotivo) return Promise.resolve(false);
+    return guardarEstado(accionConMotivo, motivo);
   };
 
   if (loading) {
@@ -104,6 +133,21 @@ export default function SolicitudDetalle() {
           <CircularProgress sx={{ color: '#0B3A5C' }} />
         </Box>
       </>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Box sx={{ maxWidth: 720, mx: 'auto', py: 4 }}>
+        <Alert severity="error">{loadError}</Alert>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/admin/solicitudes')}
+          sx={{ mt: 2, textTransform: 'none' }}
+        >
+          Volver a solicitudes
+        </Button>
+      </Box>
     );
   }
 
@@ -146,7 +190,18 @@ export default function SolicitudDetalle() {
     { label: 'Fecha', value: fechaLarga },
     { label: 'Horario', value: solicitud.horario },
     { label: 'Requisitos', value: solicitud.requisitos },
-    { label: 'Asistentes', value: `${solicitud.asistentes} personas` },
+    {
+      label: 'Asistentes',
+      value: solicitud.asistentes === null
+        ? 'No especificado'
+        : `${solicitud.asistentes} personas`,
+    },
+    ...(solicitud.estado === 'Rechazada'
+      ? [{ label: 'Motivo del rechazo', value: solicitud.motivoRechazo || 'No especificado' }]
+      : []),
+    ...(solicitud.estado === 'Cancelada'
+      ? [{ label: 'Motivo de la cancelación', value: solicitud.motivoCancelacion || 'No especificado' }]
+      : []),
   ];
 
   return (
@@ -314,7 +369,7 @@ export default function SolicitudDetalle() {
                 variant="outlined"
                 fullWidth
                 disabled={updating}
-                onClick={() => handleUpdateEstado('Rechazada')}
+                onClick={() => setAccionConMotivo('Rechazada')}
                 sx={{
                   textTransform: 'none',
                   fontWeight: 600,
@@ -334,7 +389,7 @@ export default function SolicitudDetalle() {
                 variant="contained"
                 fullWidth
                 disabled={updating}
-                onClick={() => handleUpdateEstado('Aprobada')}
+                onClick={handleAprobar}
                 sx={{
                   textTransform: 'none',
                   fontWeight: 600,
@@ -351,6 +406,24 @@ export default function SolicitudDetalle() {
                 Aprobar
               </Button>
             </Box>
+          )}
+          {(solicitud.estado === 'Pendiente' || solicitud.estado === 'Aprobada') && (
+            <Button
+              variant="outlined"
+              fullWidth
+              disabled={updating}
+              onClick={() => setAccionConMotivo('Cancelada')}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                borderRadius: '8px',
+                borderColor: '#9AA5B5',
+                color: '#5A6A7A',
+                mb: 3,
+              }}
+            >
+              Cancelar solicitud
+            </Button>
           )}
 
           <Divider sx={{ my: 2 }} />
@@ -375,6 +448,15 @@ export default function SolicitudDetalle() {
           </Box>
         </Box>
       </Box>
+      <ModalMotivo
+        open={accionConMotivo !== null}
+        titulo={accionConMotivo === 'Rechazada' ? 'Rechazar solicitud' : 'Cancelar solicitud'}
+        etiqueta={accionConMotivo === 'Rechazada' ? 'Motivo del rechazo' : 'Motivo de la cancelación'}
+        textoConfirmar={accionConMotivo === 'Rechazada' ? 'Rechazar' : 'Cancelar solicitud'}
+        cargando={updating}
+        onClose={() => setAccionConMotivo(null)}
+        onConfirmar={handleConfirmarMotivo}
+      />
     </>
   );
 }

@@ -50,9 +50,10 @@ function PublicHeader() {
                 </Button>
               ))}
               <Divider orientation="vertical" flexItem sx={{ mx: 0.75 }} />
-              <Button component={RouterLink} to="/admin/login" variant="contained" sx={{ height: 30, px: 1.5, fontSize: 11, backgroundColor: '#cd0a0a' }}>
+             <Button component={RouterLink} to="/login" variant="contained" sx={{ height: 30, px: 1.5, fontSize: 11, backgroundColor: '#cd0a0a' }}>
                 Administración
               </Button>
+              
             </Box>
           </Box>
         </Container>

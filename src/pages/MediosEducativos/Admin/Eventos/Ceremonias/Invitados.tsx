@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import {
-  Box, Typography, Button, Table, TableBody, TableCell, TableContainer,
+  Alert, Box, Typography, Button, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, MenuItem, IconButton, CircularProgress,
 } from '@mui/material';
@@ -20,6 +20,8 @@ export default function Invitados() {
   const [items, setItems] = useState<Invitado[]>([]);
   const [ceremonia, setCeremonia] = useState<Ceremonia | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [selected, setSelected] = useState<Invitado | null>(null);
   const [nombre, setNombre] = useState('');
@@ -33,6 +35,9 @@ export default function Invitados() {
       const [invs, c] = await Promise.all([getInvitados(id), getCeremoniaById(id)]);
       setItems(invs);
       setCeremonia(c);
+      setError('');
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'No fue posible cargar los invitados.');
     } finally {
       setLoading(false);
     }
@@ -45,18 +50,30 @@ export default function Invitados() {
     setNombre(inv.nombre);
     setDocumento(inv.documento);
     setEstado(inv.autorizacion);
+    setError('');
     setEditOpen(true);
   };
 
   const handleSave = async () => {
     if (!selected) return;
-    await updateInvitado(selected.id, {
-      nombre,
-      documento,
-      autorizacion: estado as 'Autorizado' | 'Pendiente',
-    });
-    setEditOpen(false);
-    load();
+    setSaving(true);
+    setError('');
+    try {
+      const actualizado = await updateInvitado(selected.id, {
+        nombre,
+        documento,
+        autorizacion: estado as 'Autorizado' | 'Pendiente',
+      });
+      if (!actualizado) throw new Error('No se encontró el invitado que intentas actualizar.');
+      setItems((actuales) => actuales.map((invitado) =>
+        invitado.id === actualizado.id ? actualizado : invitado
+      ));
+      setEditOpen(false);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'No fue posible actualizar el invitado.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -73,6 +90,7 @@ export default function Invitados() {
       <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', color: '#0B1A2A', mb: 2 }}>
         {ceremonia?.codigo || 'CER-025'} · Invitados de la ceremonia
       </Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <TableContainer sx={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5EAF0', overflow: 'hidden' }}>
         <Table>
@@ -90,6 +108,12 @@ export default function Invitados() {
               <TableRow>
                 <TableCell colSpan={6} sx={{ textAlign: 'center', py: 4 }}>
                   <CircularProgress size={28} sx={{ color: '#0B3A5C' }} />
+                </TableCell>
+              </TableRow>
+            ) : items.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} sx={{ textAlign: 'center', py: 4, color: '#5A6A7A' }}>
+                  No hay invitados registrados en esta ceremonia.
                 </TableCell>
               </TableRow>
             ) : items.map((inv) => (
@@ -123,6 +147,7 @@ export default function Invitados() {
           </IconButton>
         </DialogTitle>
         <DialogContent>
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           <Typography sx={{ color: '#5A6A7A', fontSize: '0.875rem', mb: 2 }}>
             Actualiza la información del invitado asociado al graduando.
           </Typography>
@@ -143,12 +168,12 @@ export default function Invitados() {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <Button onClick={() => setEditOpen(false)} sx={{ textTransform: 'none', color: '#5A6A7A' }}>Cancelar</Button>
-          <Button variant="contained" onClick={handleSave}
+          <Button variant="contained" disabled={saving} onClick={handleSave}
             sx={{
               backgroundColor: '#E30613', textTransform: 'none', fontWeight: 600, borderRadius: '8px',
               boxShadow: 'none', '&:hover': { backgroundColor: '#C10510', boxShadow: 'none' },
             }}>
-            Guardar cambios
+            {saving ? 'Guardando…' : 'Guardar cambios'}
           </Button>
         </DialogActions>
       </Dialog>

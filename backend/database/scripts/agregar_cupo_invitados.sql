@@ -1,0 +1,2 @@
+ALTER TABLE ceremonia_grado
+ADD COLUMN IF NOT EXISTS cupo_invitados INTEGER NOT NULL DEFAULT 2;

@@ -2,32 +2,58 @@
  * Pantalla: Nueva ceremonia — Formulario
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Button, TextField, MenuItem, Card, CardContent,
 } from '@mui/material';
-import { createCeremonia, LUGAR_OPTIONS } from './services/ceremonias.service';
+import type { EstadoCeremonia } from './interfaces/ceremonias.interface';
+import {
+  createCeremonia,
+  getEspaciosActivos,
+  type EspacioOption,
+} from './services/ceremonias.service';
 
 export default function NuevaCeremonia() {
   const navigate = useNavigate();
   const [nombre, setNombre] = useState('');
   const [fecha, setFecha] = useState('');
-  const [lugar, setLugar] = useState('');
+  const [espacios, setEspacios] = useState<EspacioOption[]>([]);
+  const [idEspacio, setIdEspacio] = useState('');
+  const [estado, setEstado] = useState<EstadoCeremonia>('Programada');
+  const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    getEspaciosActivos()
+      .then((espaciosActivos) => {
+        setEspacios(espaciosActivos);
+      })
+      .catch((cause) => {
+        setError(cause instanceof Error ? cause.message : 'No fue posible cargar los espacios.');
+      })
+      .finally(() => setLoadingOptions(false));
+  }, []);
 
   const handleCrear = async () => {
-    if (!nombre.trim()) return;
+    setError('');
+    if (!nombre.trim() || !fecha || !idEspacio) {
+      setError('Completa el nombre, la fecha y el lugar.');
+      return;
+    }
     setSaving(true);
     try {
       const c = await createCeremonia({
-        nombre,
-        fecha: fecha ? new Date(fecha + 'T12:00:00').toLocaleDateString('es-CO') : '',
-        fechaISO: fecha,
-        lugar,
-        estado: 'Programada',
+        nombre: nombre.trim(),
+        fecha,
+        idEspacio: Number(idEspacio),
+        estado,
+        cupoInvitados: 2,
       });
       navigate(`/admin/eventos/ceremonias/${c.id}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible crear la ceremonia.');
     } finally {
       setSaving(false);
     }
@@ -68,29 +94,45 @@ export default function NuevaCeremonia() {
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2, mb: 3 }}>
             <Box>
               <Typography sx={{ fontWeight: 500, fontSize: '0.875rem', color: '#1A2A3A', mb: 0.75 }}>Fecha</Typography>
-              <TextField fullWidth size="small" type="date" InputLabelProps={{ shrink: true }}
+              <TextField fullWidth size="small" type="date" slotProps={{ inputLabel: { shrink: true } }}
+                required
                 value={fecha} onChange={(e) => setFecha(e.target.value)}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               />
             </Box>
             <Box>
               <Typography sx={{ fontWeight: 500, fontSize: '0.875rem', color: '#1A2A3A', mb: 0.75 }}>Lugar / campus</Typography>
-              <TextField select fullWidth size="small" value={lugar}
-                onChange={(e) => setLugar(e.target.value)}
+              <TextField select fullWidth size="small" value={idEspacio}
+                onChange={(e) => setIdEspacio(e.target.value)}
+                disabled={loadingOptions || espacios.length === 0}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               >
                 <MenuItem value="">Selecciona el lugar o campus</MenuItem>
-                {LUGAR_OPTIONS.map((l) => <MenuItem key={l} value={l}>{l}</MenuItem>)}
+                {espacios.map((espacio) => (
+                  <MenuItem key={espacio.id_espacio} value={String(espacio.id_espacio)}>
+                    {espacio.nombre} · {espacio.campus}
+                  </MenuItem>
+                ))}
               </TextField>
             </Box>
             <Box>
               <Typography sx={{ fontWeight: 500, fontSize: '0.875rem', color: '#1A2A3A', mb: 0.75 }}>Estado</Typography>
-              <TextField fullWidth size="small" value="Programada" disabled
-                helperText="Estado inicial de la ceremonia"
-                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', backgroundColor: '#F8FAFC' } }}
-              />
+              <TextField select fullWidth size="small" value={estado}
+                onChange={(e) => setEstado(e.target.value as EstadoCeremonia)}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+              >
+                <MenuItem value="Programada">Programada</MenuItem>
+                <MenuItem value="En curso">En curso</MenuItem>
+                <MenuItem value="Finalizada">Finalizada</MenuItem>
+              </TextField>
             </Box>
           </Box>
+
+          {error && (
+            <Typography role="alert" sx={{ color: '#B42318', fontSize: '0.875rem', mb: 2 }}>
+              {error}
+            </Typography>
+          )}
 
           <Box sx={{ backgroundColor: '#F0F5FA', borderRadius: '10px', p: 2, mb: 3 }}>
             <Typography sx={{ fontWeight: 600, fontSize: '0.9rem', color: '#0B1A2A', mb: 0.4 }}>
@@ -106,7 +148,7 @@ export default function NuevaCeremonia() {
               sx={{ textTransform: 'none', fontWeight: 500, borderRadius: '8px', borderColor: '#C5CDD8', color: '#1A2A3A' }}>
               Cancelar
             </Button>
-            <Button variant="contained" disabled={saving || !nombre.trim()} onClick={handleCrear}
+            <Button variant="contained" disabled={saving || loadingOptions || !nombre.trim()} onClick={handleCrear}
               sx={{
                 backgroundColor: '#E30613', textTransform: 'none', fontWeight: 600, borderRadius: '8px',
                 px: 2.5, boxShadow: 'none', '&:hover': { backgroundColor: '#C10510', boxShadow: 'none' },

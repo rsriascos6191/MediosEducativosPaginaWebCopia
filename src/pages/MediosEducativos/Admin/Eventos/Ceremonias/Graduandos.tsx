@@ -5,13 +5,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Button, TextField, MenuItem, Table, TableBody,
+  Alert, Box, Typography, Button, TextField, MenuItem, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Card, CardContent,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import type { Graduando, GraduandoFilters } from './interfaces/ceremonias.interface';
-import { getGraduandos, getCeremoniaById, PROGRAMA_OPTIONS } from './services/ceremonias.service';
-import type { Ceremonia } from './interfaces/ceremonias.interface';
+import type { Ceremonia, Graduando, GraduandoFilters, ProgramaOption, Sesion } from './interfaces/ceremonias.interface';
+import { getGraduandos, getCeremoniaById, getProgramasCatalogo, getSesiones } from './services/ceremonias.service';
+import ImportarGraduandosDialog from './ImportarGraduandosDialog';
 
 export default function Graduandos() {
   const { id } = useParams<{ id: string }>();
@@ -19,8 +19,12 @@ export default function Graduandos() {
   const [items, setItems] = useState<Graduando[]>([]);
   const [stats, setStats] = useState({ total: 0, revisados: 0, errores: 0 });
   const [ceremonia, setCeremonia] = useState<Ceremonia | null>(null);
+  const [sesiones, setSesiones] = useState<Sesion[]>([]);
+  const [programas, setProgramas] = useState<ProgramaOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filters, setFilters] = useState<GraduandoFilters>({});
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = useCallback(async (f?: GraduandoFilters) => {
     if (!id) return;
@@ -33,12 +37,27 @@ export default function Graduandos() {
       setItems(res.data);
       setStats(res.stats);
       setCeremonia(c);
+      setError('');
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'No fue posible cargar los graduandos.');
     } finally {
       setLoading(false);
     }
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!id) return;
+    Promise.all([getSesiones(id), getProgramasCatalogo()])
+      .then(([sesionesActivas, programasDisponibles]) => {
+        setSesiones(sesionesActivas);
+        setProgramas(programasDisponibles.filter((programa) => programa.estado));
+      })
+      .catch((loadError: unknown) => {
+        setError(loadError instanceof Error ? loadError.message : 'No fue posible cargar las opciones de filtro.');
+      });
+  }, [id]);
 
   return (
     <>
@@ -57,7 +76,7 @@ export default function Graduandos() {
             sx={{ textTransform: 'none', fontWeight: 500, borderRadius: '8px', borderColor: '#C5CDD8', color: '#1A2A3A' }}>
             + Agregar graduando
           </Button>
-          <Button variant="contained" sx={{
+          <Button variant="contained" onClick={() => setImportOpen(true)} sx={{
             backgroundColor: '#0B3A5C', textTransform: 'none', fontWeight: 600, borderRadius: '8px',
             boxShadow: 'none', '&:hover': { backgroundColor: '#062A42', boxShadow: 'none' },
           }}>
@@ -69,7 +88,9 @@ export default function Graduandos() {
       <Typography sx={{ fontWeight: 600, fontSize: '1rem', color: '#0B1A2A', mt: 1 }}>
         {ceremonia?.nombre.replace(/ — Ejemplo \d+/, '') || 'Ceremonia de grados'}
       </Typography>
-      <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem', mb: 2 }}>Fecha · Lugar</Typography>
+      <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem', mb: 2 }}>
+        {ceremonia ? `${ceremonia.fecha} · ${ceremonia.lugar}` : 'Fecha · Lugar'}
+      </Typography>
 
       {/* Stats */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 1.5, mb: 3 }}>
@@ -77,7 +98,7 @@ export default function Graduandos() {
           { label: 'Total de graduandos', value: stats.total },
           { label: 'Registros revisados', value: stats.revisados },
           { label: 'Registros con errores', value: stats.errores, red: true },
-          { label: 'Ceremonia completa', value: 'Todos los graduandos' },
+          { label: 'Registros activos', value: items.filter((graduando) => graduando.estado).length },
         ].map((s) => (
           <Card key={s.label} elevation={0} sx={{ borderRadius: '10px', border: '1px solid #E5EAF0' }}>
             <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
@@ -105,14 +126,14 @@ export default function Graduandos() {
           onChange={(e) => setFilters({ ...filters, sesion: e.target.value })}
           sx={{ minWidth: 150, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
           <MenuItem value="Todas las sesiones">Todas las sesiones</MenuItem>
-          <MenuItem value="Sesión 1">Sesión 1</MenuItem>
-          <MenuItem value="Sesión 2">Sesión 2</MenuItem>
+          <MenuItem value="sin-asignar">Sin asignar</MenuItem>
+          {sesiones.map((sesion) => <MenuItem key={sesion.id} value={sesion.id}>{sesion.nombre}</MenuItem>)}
         </TextField>
         <TextField select size="small" label="Programa académico" value={filters.programa || 'Todos los programas'}
           onChange={(e) => setFilters({ ...filters, programa: e.target.value })}
           sx={{ minWidth: 170, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
           <MenuItem value="Todos los programas">Todos los programas</MenuItem>
-          {PROGRAMA_OPTIONS.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
+          {programas.map((programa) => <MenuItem key={programa.id_programa} value={String(programa.id_programa)}>{programa.nombre}</MenuItem>)}
         </TextField>
         <Button variant="contained" onClick={() => load(filters)}
           sx={{ backgroundColor: '#0B3A5C', textTransform: 'none', fontWeight: 600, borderRadius: '8px', '&:hover': { backgroundColor: '#062A42' } }}>
@@ -123,6 +144,8 @@ export default function Graduandos() {
           Limpiar filtros
         </Button>
       </Box>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       {/* Tabla */}
       <TableContainer sx={{ backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid #E5EAF0', overflow: 'hidden', mb: 2.5 }}>
@@ -139,6 +162,8 @@ export default function Graduandos() {
           <TableBody>
             {loading ? (
               <TableRow><TableCell colSpan={6} sx={{ textAlign: 'center', py: 4, color: '#5A6A7A' }}>Cargando…</TableCell></TableRow>
+            ) : items.length === 0 ? (
+              <TableRow><TableCell colSpan={6} sx={{ textAlign: 'center', py: 4, color: '#5A6A7A' }}>No hay graduandos para los filtros seleccionados.</TableCell></TableRow>
             ) : items.map((g) => (
               <TableRow key={g.id} sx={{ '&:hover': { backgroundColor: '#F8FAFC' }, '& td': { borderBottom: '1px solid #F0F3F7' } }}>
                 <TableCell sx={{ fontWeight: 600, color: '#1A2A3A', fontSize: '0.875rem' }}>
@@ -146,7 +171,7 @@ export default function Graduandos() {
                 </TableCell>
                 <TableCell sx={{ color: '#1A2A3A', fontSize: '0.875rem' }}>{g.documento}</TableCell>
                 <TableCell sx={{ color: '#1A2A3A', fontSize: '0.875rem' }}>{g.programa}</TableCell>
-                <TableCell sx={{ color: '#1A2A3A', fontSize: '0.875rem' }}>{g.sesionLabel || '—'}</TableCell>
+                <TableCell sx={{ color: '#1A2A3A', fontSize: '0.875rem' }}>{g.sesionLabel || 'Sin asignar'}</TableCell>
                 <TableCell sx={{ color: '#1A2A3A', fontSize: '0.875rem' }}>
                   {g.invitadosCount} invitado{g.invitadosCount !== 1 ? 's' : ''}
                 </TableCell>
@@ -175,28 +200,29 @@ export default function Graduandos() {
           </Typography>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
             <Box>
-              <Typography sx={{ fontWeight: 500, fontSize: '0.9rem', color: '#1A2A3A' }}>Listado oficial de graduandos</Typography>
-              <Typography sx={{ color: '#1B7A3D', fontSize: '0.85rem' }}>
-                {stats.revisados} registros revisados · {stats.revisados - stats.errores} válidos · {stats.errores} con errores
+              <Typography sx={{ fontWeight: 500, fontSize: '0.9rem', color: '#1A2A3A' }}>
+                Importa hasta 1.000 graduandos desde una plantilla .xlsx.
+              </Typography>
+              <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem' }}>
+                La vista previa reporta errores y no guarda nada hasta que confirmes.
               </Typography>
             </Box>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button variant="outlined" sx={{ textTransform: 'none', borderRadius: '8px', borderColor: '#C5CDD8', color: '#1A2A3A' }}>
-                Revisar
+            <Button variant="outlined" onClick={() => setImportOpen(true)}
+              sx={{ textTransform: 'none', borderRadius: '8px', borderColor: '#C5CDD8', color: '#1A2A3A' }}>
+                Abrir importador
               </Button>
-              <Button variant="contained" sx={{
-                backgroundColor: '#E30613', textTransform: 'none', fontWeight: 600, borderRadius: '8px',
-                boxShadow: 'none', '&:hover': { backgroundColor: '#C10510', boxShadow: 'none' },
-              }}>
-                Confirmar
-              </Button>
-            </Box>
           </Box>
           <Typography sx={{ color: '#5A6A7A', fontSize: '0.8rem', mt: 1.5 }}>
             Los invitados se registran posteriormente desde el detalle del graduando.
           </Typography>
         </CardContent>
       </Card>
+      <ImportarGraduandosDialog
+        open={importOpen}
+        ceremoniaId={id || ''}
+        onClose={() => setImportOpen(false)}
+        onImported={() => { void load(filters); }}
+      />
     </>
   );
 }

@@ -10,7 +10,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Typography,
   Button,
   Chip,
 } from '@mui/material';
@@ -20,6 +19,8 @@ import type { Solicitud, EstadoSolicitud } from '../interfaces/solicitudes.inter
 interface Props {
   solicitudes: Solicitud[];
   loading?: boolean;
+  onRechazar: (solicitud: Solicitud) => void;
+  onCancelar: (solicitud: Solicitud) => void;
 }
 
 const estadoColor: Record<
@@ -33,7 +34,12 @@ const estadoColor: Record<
   Cancelada: { bg: '#F5F5F5', color: '#616161' },
 };
 
-export default function SolicitudesTable({ solicitudes, loading }: Props) {
+export default function SolicitudesTable({
+  solicitudes,
+  loading,
+  onRechazar,
+  onCancelar,
+}: Props) {
   const navigate = useNavigate();
 
   if (loading) {
@@ -64,7 +70,7 @@ export default function SolicitudesTable({ solicitudes, loading }: Props) {
       <Table>
         <TableHead>
           <TableRow sx={{ backgroundColor: '#FAFBFC' }}>
-            {['Código', 'Solicitante', 'Espacio', 'Fecha', 'Horario', 'Campus', 'Acción', ''].map(
+            {['Código', 'Solicitante', 'Espacio', 'Fecha', 'Horario', 'Campus', 'Acciones', 'Estado'].map(
               (header) => (
                 <TableCell
                   key={header}
@@ -110,21 +116,41 @@ export default function SolicitudesTable({ solicitudes, loading }: Props) {
                 {s.campus}
               </TableCell>
               <TableCell>
-                <Button
-                  variant="text"
-                  onClick={() => navigate(`/admin/solicitudes/${s.id}`)}
-                  sx={{
-                    color: '#1565C0',
-                    textTransform: 'none',
-                    fontWeight: 500,
-                    fontSize: '0.875rem',
-                    p: 0,
-                    minWidth: 'auto',
-                    '&:hover': { backgroundColor: 'transparent', textDecoration: 'underline' },
-                  }}
-                >
-                  Ver detalle →
-                </Button>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.75 }}>
+                  <Button
+                    variant="text"
+                    onClick={() => navigate(`/admin/solicitudes/${s.id}`)}
+                    sx={{
+                      color: '#1565C0',
+                      textTransform: 'none',
+                      fontWeight: 500,
+                      fontSize: '0.875rem',
+                      p: 0,
+                      minWidth: 'auto',
+                      '&:hover': { backgroundColor: 'transparent', textDecoration: 'underline' },
+                    }}
+                  >
+                    Ver detalle →
+                  </Button>
+                  {s.estado === 'Pendiente' && (
+                    <Button
+                      size="small"
+                      onClick={() => onRechazar(s)}
+                      sx={{ color: '#C62828', textTransform: 'none', minWidth: 'auto', px: 0.5 }}
+                    >
+                      Rechazar
+                    </Button>
+                  )}
+                  {(s.estado === 'Pendiente' || s.estado === 'Aprobada') && (
+                    <Button
+                      size="small"
+                      onClick={() => onCancelar(s)}
+                      sx={{ color: '#5A6A7A', textTransform: 'none', minWidth: 'auto', px: 0.5 }}
+                    >
+                      Cancelar
+                    </Button>
+                  )}
+                </Box>
               </TableCell>
               <TableCell>
                 <Chip

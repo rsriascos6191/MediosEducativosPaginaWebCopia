@@ -50,6 +50,7 @@ export default function DetalleCeremonia() {
   const [horaInicio, setHoraInicio] = useState('');
   const [horaFin, setHoraFin] = useState('');
   const [saving, setSaving] = useState(false);
+  const [sesionError, setSesionError] = useState('');
 
   /* Registro fotográfico */
   const [fotos, setFotos] = useState<FotoItem[]>(FOTOS_INICIALES);
@@ -74,19 +75,28 @@ export default function DetalleCeremonia() {
 
   const handleAddSesion = async () => {
     if (!id) return;
+    setSesionError('');
+    if ((horaInicio && !horaFin) || (!horaInicio && horaFin) || (horaInicio && horaInicio >= horaFin)) {
+      setSesionError('Completa un rango de horas válido.');
+      return;
+    }
     setSaving(true);
     try {
-      await addSesion(id, {
-        nombre: sesionNombre || `Sesión ${sesiones.length + 1}`,
+      const nuevaSesion = await addSesion(id, {
+        nombre: sesionNombre.trim(),
         estado: sesionEstado as 'Pendiente',
         horaInicio,
         horaFin,
       });
+      setSesiones((actuales) =>
+        [...actuales, nuevaSesion].sort((a, b) => a.numeroSesion - b.numeroSesion)
+      );
       setModalOpen(false);
       setSesionNombre('');
       setHoraInicio('');
       setHoraFin('');
-      load();
+    } catch (cause) {
+      setSesionError(cause instanceof Error ? cause.message : 'No fue posible crear la sesión.');
     } finally {
       setSaving(false);
     }
@@ -217,7 +227,7 @@ export default function DetalleCeremonia() {
             {ceremonia.nombre.replace(/ — Ejemplo \d+/, '') || 'Ceremonia de grados'}
           </Typography>
           <Typography sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem' }}>
-            Fecha · Lugar · Estado
+            Fecha: {ceremonia.fecha || '—'} · Lugar: {ceremonia.lugar || '—'}
           </Typography>
         </Box>
         <Chip label={ceremonia.estado} size="small" sx={{
@@ -229,8 +239,8 @@ export default function DetalleCeremonia() {
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 1.5, mb: 3 }}>
         {[
           { label: 'Número de sesiones', value: sesiones.length ? String(sesiones.length) : 'Por configurar' },
-          { label: 'Total de graduandos', value: ceremonia.graduandos ? String(ceremonia.graduandos) : 'Por configurar' },
-          { label: 'Total de invitados', value: ceremonia.invitados ? String(ceremonia.invitados) : 'Por configurar' },
+          { label: 'Total de graduandos', value: String(ceremonia.graduandos ?? '—') },
+          { label: 'Total de invitados', value: String(ceremonia.invitados ?? '—') },
           { label: 'Estado de la ceremonia', value: ceremonia.estado },
         ].map((k) => (
           <Card key={k.label} elevation={0} sx={{ borderRadius: '10px', border: '1px solid #E5EAF0' }}>
@@ -264,16 +274,28 @@ export default function DetalleCeremonia() {
               <CardContent sx={{ p: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                    <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: '#0B1A2A' }}>{s.nombre}</Typography>
+                    <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: '#0B1A2A' }}>
+                      Sesión {s.numeroSesion}
+                    </Typography>
                     <Chip label={s.estado} size="small" sx={{ backgroundColor: '#FFF4E5', color: '#B76E00', fontWeight: 600, fontSize: '0.7rem', height: 22 }} />
                   </Box>
+                  {s.nombre.trim() !== `Sesión ${s.numeroSesion}` && !/^\d+$/.test(s.nombre.trim()) && (
+                    <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem', mb: 0.5 }}>
+                      {s.nombre}
+                    </Typography>
+                  )}
                   <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem' }}>
                     {s.horaInicio ? `${s.horaInicio} – ${s.horaFin}` : 'Horario por definir'}
                   </Typography>
                   <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem' }}>
                     {s.programas.length ? s.programas.join(', ') : 'Programas por configurar'}
                   </Typography>
-                  <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem' }}>Graduandos por configurar</Typography>
+                  <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem' }}>
+                    Graduandos: {s.graduandosCount ?? '—'}
+                  </Typography>
+                  <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem' }}>
+                    Invitados: {s.invitadosCount ?? '—'}
+                  </Typography>
                 </Box>
                 <Button variant="contained" size="small"
                   onClick={() => navigate(`/admin/eventos/ceremonias/${id}/sesion/${s.id}`)}
@@ -294,8 +316,8 @@ export default function DetalleCeremonia() {
             <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: '#0B1A2A', mb: 2 }}>Resumen del avance</Typography>
             {[
               { label: 'Sesiones', value: sesiones.length ? String(sesiones.length) : 'Por configurar' },
-              { label: 'Graduandos', value: 'Por configurar' },
-              { label: 'Invitados', value: 'Por configurar' },
+              { label: 'Graduandos', value: String(ceremonia.graduandos ?? '—') },
+              { label: 'Invitados', value: String(ceremonia.invitados ?? '—') },
             ].map((r) => (
               <Box key={r.label} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.25 }}>
                 <Typography sx={{ color: '#5A6A7A', fontSize: '0.875rem' }}>{r.label}</Typography>
@@ -560,7 +582,7 @@ export default function DetalleCeremonia() {
 
       {/* Modal Agregar sesión */}
       <Dialog open={modalOpen} onClose={() => setModalOpen(false)} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { borderRadius: '12px' } }}>
+        slotProps={{ paper: { sx: { borderRadius: '12px' } } }}>
         <DialogTitle sx={{ fontWeight: 700, pr: 6 }}>
           Agregar sesión
           <IconButton onClick={() => setModalOpen(false)} sx={{ position: 'absolute', right: 12, top: 12 }}>
@@ -568,6 +590,11 @@ export default function DetalleCeremonia() {
           </IconButton>
         </DialogTitle>
         <DialogContent>
+          {sesionError && (
+            <Typography role="alert" sx={{ color: '#B42318', fontSize: '0.875rem', mb: 2 }}>
+              {sesionError}
+            </Typography>
+          )}
           <Typography sx={{ color: '#5A6A7A', fontSize: '0.875rem', mb: 2 }}>
             Configura los datos básicos de una nueva sesión para esta ceremonia.
           </Typography>
@@ -578,8 +605,9 @@ export default function DetalleCeremonia() {
             <Typography sx={{ color: '#5A6A7A', fontSize: '0.8rem' }}>Fecha · Lugar</Typography>
           </Box>
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
-            <TextField size="small" label="Sesión" value={sesionNombre}
-              onChange={(e) => setSesionNombre(e.target.value)} placeholder="Sesión 1"
+            <TextField size="small" label="Nombre de referencia (opcional)" value={sesionNombre}
+              onChange={(e) => setSesionNombre(e.target.value)} placeholder="Ej. Jornada de la mañana"
+              helperText="El número se asigna automáticamente en orden: Sesión 1, Sesión 2, etc."
               sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }} />
             <TextField select size="small" label="Estado" value={sesionEstado}
               onChange={(e) => setSesionEstado(e.target.value)}

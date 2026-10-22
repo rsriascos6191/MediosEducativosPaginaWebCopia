@@ -2,12 +2,24 @@
  * Portal público – Confirmación de solicitud
  */
 
-import { Box, Typography, Button, Container, Card, CardContent, Chip } from '@mui/material';
+import { Box, Typography, Button, Container, Card, Chip } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import type { SolicitudReservaCreada } from '../../../../services/api';
 
 export default function Confirmacion() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const solicitud = (location.state as { solicitud?: SolicitudReservaCreada } | null)
+    ?.solicitud;
+  const fecha = solicitud
+    ? new Intl.DateTimeFormat('es-CO', { dateStyle: 'long', timeZone: 'UTC' }).format(
+        new Date(`${solicitud.fechaInicio}T00:00:00Z`),
+      )
+    : '—';
+  const horario = solicitud
+    ? `${solicitud.horaInicio} – ${solicitud.horaFin}`
+    : '—';
 
   return (
     <>
@@ -33,17 +45,25 @@ export default function Confirmacion() {
           <Typography sx={{ color: '#5A6A7A', fontSize: '0.75rem', fontWeight: 600, letterSpacing: 0.5 }}>
             NÚMERO DE SOLICITUD
           </Typography>
-          <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#0B1A2A' }}>#000001</Typography>
+          <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: '#0B1A2A' }}>
+            {solicitud?.codigo ?? '—'}
+          </Typography>
         </Card>
 
         <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: '#0B1A2A', mb: 1.5, textAlign: 'left' }}>
           Resumen de la solicitud
         </Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5, mb: 2, textAlign: 'left' }}>
-          {['ESPACIO', 'FECHA', 'HORARIO', 'SOLICITANTE'].map((l) => (
-            <Box key={l} sx={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E5EAF0', p: 1.5 }}>
-              <Typography sx={{ color: '#5A6A7A', fontSize: '0.7rem', fontWeight: 600 }}>{l}</Typography>
-              <Typography sx={{ color: '#1A2A3A', fontSize: '0.85rem' }}>—</Typography>
+          {[
+            ['ESPACIO', solicitud?.espacio ?? '—'],
+            ['CAMPUS', solicitud?.campus ?? '—'],
+            ['FECHA', fecha],
+            ['HORARIO', horario],
+            ['SOLICITANTE', solicitud?.solicitante ?? '—'],
+          ].map(([label, valor]) => (
+            <Box key={label} sx={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E5EAF0', p: 1.5 }}>
+              <Typography sx={{ color: '#5A6A7A', fontSize: '0.7rem', fontWeight: 600 }}>{label}</Typography>
+              <Typography sx={{ color: '#1A2A3A', fontSize: '0.85rem' }}>{valor}</Typography>
             </Box>
           ))}
         </Box>

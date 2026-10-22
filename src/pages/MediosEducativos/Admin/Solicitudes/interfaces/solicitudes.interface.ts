@@ -24,9 +24,11 @@ export interface Solicitud {
   fechaDisplay: string;
   horario: string;
   requisitos: string;
-  asistentes: number;
+  asistentes: number | null;
   estado: EstadoSolicitud;
   observaciones?: string;
+  motivoRechazo?: string | null;
+  motivoCancelacion?: string | null;
   fechaCreacion: string;
   ultimaActualizacion: string;
 }
