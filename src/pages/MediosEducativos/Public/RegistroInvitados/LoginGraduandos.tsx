@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { useNavigate } from 'react-router-dom';
+import { iniciarSesionGraduando } from '../../Admin/Eventos/Ceremonias/services/ceremonias.service';
 
 const LOGO = 'https://www.unicesmag.edu.co/recursos/uploads/2022/04/Escudos_2-2.png';
 const BG =
@@ -30,8 +31,9 @@ export default function LoginGraduandos() {
   const [cedula, setCedula] = useState('');
   const [codigo, setCodigo] = useState('');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -52,11 +54,18 @@ export default function LoginGraduandos() {
       return;
     }
 
-    // Mock: datos listos para validación contra base de datos
-    localStorage.setItem('me_graduando_auth', 'true');
-    localStorage.setItem('me_graduando_cedula', cedula);
-    localStorage.setItem('me_graduando_codigo', codigo);
-    navigate('/registro-invitados/formulario');
+    setSaving(true);
+    try {
+      await iniciarSesionGraduando(cedula, codigo);
+      localStorage.setItem('me_graduando_auth', 'true');
+      localStorage.setItem('me_graduando_cedula', cedula);
+      localStorage.setItem('me_graduando_codigo', codigo);
+      navigate('/registro-invitados/formulario');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible validar el acceso.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -266,6 +275,7 @@ export default function LoginGraduandos() {
               type="submit"
               fullWidth
               variant="contained"
+              disabled={saving}
               sx={{
                 backgroundColor: '#1565C0',
                 textTransform: 'none',

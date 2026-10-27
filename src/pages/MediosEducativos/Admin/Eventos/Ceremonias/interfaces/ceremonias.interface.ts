@@ -2,7 +2,7 @@
  * Interfaces para Ceremonias de grado.
  */
 
-export type EstadoCeremonia = 'Programada' | 'En curso' | 'Finalizada';
+export type EstadoCeremonia = 'Programada' | 'En curso' | 'Finalizada' | 'Cancelada';
 export type EstadoSesion = 'Pendiente' | 'En curso' | 'Finalizada';
 export type EstadoAutorizacion = 'Autorizado' | 'Pendiente';
 export type EstadoIngreso = 'Ingresó' | 'Pendiente';

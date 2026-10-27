@@ -16,6 +16,7 @@ const estadoStyles: Record<string, { bg: string; color: string }> = {
   Programada: { bg: '#E3F2FD', color: '#1565C0' },
   'En curso': { bg: '#E6F4EA', color: '#1B7A3D' },
   Finalizada: { bg: '#F0F2F5', color: '#5A6A7A' },
+  Cancelada: { bg: '#FDECEA', color: '#B42318' },
 };
 
 export default function CeremoniasListado() {
@@ -74,10 +75,10 @@ export default function CeremoniasListado() {
           onChange={(e) => setFilters({ ...filters, nombre: e.target.value })}
           sx={{ flex: 1, minWidth: 200, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
         />
-        <TextField size="small" type="date" label="Fecha" InputLabelProps={{ shrink: true }}
+        <TextField size="small" type="date" label="Fecha" slotProps={{ inputLabel: { shrink: true } }}
           value={filters.fecha || ''}
           onChange={(e) => setFilters({ ...filters, fecha: e.target.value })}
-          sx={{ minWidth: 150, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+          sx={{ width: 180, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
         />
         <TextField select size="small" label="Estado" value={filters.estado || 'Todos'}
           onChange={(e) => setFilters({ ...filters, estado: e.target.value })}

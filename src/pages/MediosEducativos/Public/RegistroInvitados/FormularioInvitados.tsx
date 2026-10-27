@@ -23,10 +23,10 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useNavigate } from 'react-router-dom';
-import type { Graduando } from '../../Admin/Eventos/Ceremonias/interfaces/ceremonias.interface';
 import {
-  getGraduandoByDocumento,
-  addInvitado,
+  iniciarSesionGraduando,
+  addInvitados,
+  type GraduandoRegistroPublico,
 } from '../../Admin/Eventos/Ceremonias/services/ceremonias.service';
 
 const LOGO = 'https://www.unicesmag.edu.co/recursos/uploads/2022/04/Escudos_2-2.png';
@@ -66,7 +66,7 @@ export default function FormularioInvitados() {
   const codigoLogin = localStorage.getItem('me_graduando_codigo') || '';
   const auth = localStorage.getItem('me_graduando_auth') === 'true';
 
-  const [graduando, setGraduando] = useState<Graduando | null>(null);
+  const [graduando, setGraduando] = useState<GraduandoRegistroPublico | null>(null);
   const [loading, setLoading] = useState(true);
   const [invitado1, setInvitado1] = useState<InvitadoForm>(emptyInvitado());
   const [invitado2, setInvitado2] = useState<InvitadoForm>(emptyInvitado());
@@ -79,16 +79,13 @@ export default function FormularioInvitados() {
       navigate('/registro-invitados', { replace: true });
       return;
     }
-    getGraduandoByDocumento(cedulaLogin)
+    iniciarSesionGraduando(cedulaLogin, codigoLogin)
       .then((g) => {
-        if (g) {
-          setGraduando({
-            ...g,
-            codigoEstudiantil: g.codigoEstudiantil || codigoLogin,
-          });
-        } else {
-          setGraduando(null);
-        }
+        setGraduando(g);
+      })
+      .catch((cause: unknown) => {
+        setGraduando(null);
+        setError(cause instanceof Error ? cause.message : 'No fue posible validar el acceso.');
       })
       .finally(() => setLoading(false));
   }, [auth, cedulaLogin, codigoLogin, navigate]);
@@ -111,51 +108,47 @@ export default function FormularioInvitados() {
       return;
     }
 
-    const e1 = validateInvitado(invitado1, 'Primer invitado');
-    if (e1) {
-      setError(e1);
+    const invitadosPendientes = [
+      { datos: invitado1, etiqueta: 'Primer invitado' },
+      { datos: invitado2, etiqueta: 'Segundo invitado' },
+    ].filter(({ datos }) =>
+      datos.nombre.trim() || datos.cedula.trim() ||
+      datos.telefono.trim() || datos.parentesco
+    );
+    if (invitadosPendientes.length === 0) {
+      setError(validateInvitado(invitado1, 'Primer invitado') || 'Ingresa los datos del invitado.');
       return;
     }
-    const e2 = validateInvitado(invitado2, 'Segundo invitado');
-    if (e2) {
-      setError(e2);
-      return;
+    for (const invitado of invitadosPendientes) {
+      const validacion = validateInvitado(invitado.datos, invitado.etiqueta);
+      if (validacion) {
+        setError(validacion);
+        return;
+      }
     }
 
     setSaving(true);
     try {
-      const nombreGraduando = `${graduando.nombres} ${graduando.apellidos}`.trim();
-      await addInvitado({
-        graduandoId: graduando.id,
-        ceremoniaId: graduando.ceremoniaId,
-        nombre: invitado1.nombre.trim(),
-        documento: invitado1.cedula,
-        graduandoNombre: nombreGraduando,
-        tipo: invitado1.parentesco,
-        parentesco: invitado1.parentesco,
-        telefono: invitado1.telefono,
-        autorizacion: 'Pendiente',
-        estadoIngreso: 'Pendiente',
-      });
-      await addInvitado({
-        graduandoId: graduando.id,
-        ceremoniaId: graduando.ceremoniaId,
-        nombre: invitado2.nombre.trim(),
-        documento: invitado2.cedula,
-        graduandoNombre: nombreGraduando,
-        tipo: invitado2.parentesco,
-        parentesco: invitado2.parentesco,
-        telefono: invitado2.telefono,
-        autorizacion: 'Pendiente',
-        estadoIngreso: 'Pendiente',
-      });
+      const guardados = await addInvitados(
+        graduando.id,
+        invitadosPendientes.map(({ datos }) => ({
+          nombre: datos.nombre.trim(),
+          documento: datos.cedula,
+          parentesco: datos.parentesco,
+          telefono: datos.telefono,
+          autorizacion: 'Pendiente',
+        })),
+      );
+      setGraduando((actual) => actual
+        ? { ...actual, invitadosRegistrados: actual.invitadosRegistrados + guardados.length }
+        : actual);
       setSuccess(
         'Invitados registrados correctamente. Podrás verlos en el módulo de ceremonias del panel administrativo.'
       );
       setInvitado1(emptyInvitado());
       setInvitado2(emptyInvitado());
-    } catch {
-      setError('Ocurrió un error al guardar. Intenta de nuevo.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Ocurrió un error al guardar. Intenta de nuevo.');
     } finally {
       setSaving(false);
     }

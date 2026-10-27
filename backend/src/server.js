@@ -10,7 +10,14 @@ dotenv.config();
 const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: "8mb" }));
+const jsonBodyParser = express.json({ limit: "8mb" });
+const photoJsonBodyParser = express.json({ limit: "18mb" });
+app.use((req, res, next) => {
+  const parser = /^\/api\/ceremonias\/\d+\/fotografias$/.test(req.path)
+    ? photoJsonBodyParser
+    : jsonBodyParser;
+  return parser(req, res, next);
+});
 app.use((error, _req, res, next) => {
   if (error?.type === "entity.too.large") {
     return res.status(413).json({ mensaje: "El archivo o los datos superan el límite de tamaño permitido." });
@@ -72,8 +79,42 @@ app.get("/api/eventos", async (req, res) => {
   }
 });
 
-const estadosCeremonia = ["Programada", "En curso", "Finalizada"];
+const estadosCeremonia = ["Programada", "En curso", "Finalizada", "Cancelada"];
+const estadosCeremoniaCreacion = ["Programada", "En curso", "Finalizada"];
+const estadosCeremoniaActivasRegistroInvitados = ["Programada"];
 const estadosSesion = ["Pendiente", "En curso", "Finalizada"];
+const transicionesCeremonia = {
+  Programada: ["En curso", "Cancelada"],
+  "En curso": ["Finalizada", "Cancelada"],
+  Finalizada: ["Programada"],
+};
+const ordenEstadosSesion = ["Pendiente", "En curso", "Finalizada"];
+const columnasEvidenciaFotografica = [
+  "evidencia_fotografia_1",
+  "evidencia_fotografia_2",
+  "evidencia_fotografia_3",
+  "evidencia_fotografia_4",
+];
+
+function obtenerMimeImagen(buffer) {
+  if (buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+    return "image/png";
+  }
+  if (buffer.length >= 3 && buffer[0] === 255 && buffer[1] === 216 && buffer[2] === 255) {
+    return "image/jpeg";
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer.toString("ascii", 0, 4) === "RIFF" &&
+    buffer.toString("ascii", 8, 12) === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  if (["GIF87a", "GIF89a"].includes(buffer.toString("ascii", 0, 6))) {
+    return "image/gif";
+  }
+  return null;
+}
 
 app.get("/api/ceremonias", async (req, res) => {
   const { nombre, fecha, estado } = req.query;
@@ -106,6 +147,7 @@ app.get("/api/ceremonias", async (req, res) => {
               e.nombre AS lugar,
               c.nombre AS campus,
               cg.estado,
+              cg.cupo_invitados AS "cupoInvitados",
               (SELECT COUNT(*)::int FROM sesion s
                WHERE s.id_ceremonia = cg.id_ceremonia) AS sesiones,
               (SELECT COUNT(*)::int FROM graduando g
@@ -145,6 +187,7 @@ app.get("/api/ceremonias/:id", async (req, res) => {
               e.nombre AS lugar,
               c.nombre AS campus,
               cg.estado,
+              cg.cupo_invitados AS "cupoInvitados",
               (SELECT COUNT(*)::int FROM sesion s
                WHERE s.id_ceremonia = cg.id_ceremonia) AS sesiones,
               (SELECT COUNT(*)::int FROM graduando g
@@ -169,6 +212,311 @@ app.get("/api/ceremonias/:id", async (req, res) => {
   } catch (error) {
     console.error("Error al consultar el detalle de la ceremonia:", error);
     return res.status(500).json({ mensaje: "Error al consultar la ceremonia." });
+  }
+});
+
+app.patch("/api/ceremonias/:id/estado", async (req, res) => {
+  const idCeremonia = Number(req.params.id);
+  const cuerpo = req.body && typeof req.body === "object" && !Array.isArray(req.body)
+    ? req.body
+    : null;
+  const estado = cuerpo?.estado;
+  const motivo = typeof cuerpo?.motivo === "string" ? cuerpo.motivo.trim() : "";
+  if (
+    !Number.isSafeInteger(idCeremonia) ||
+    idCeremonia <= 0 ||
+    !["Programada", "En curso", "Finalizada", "Cancelada"].includes(estado) ||
+    (estado === "Cancelada" && (!motivo || motivo.length > 1000))
+  ) {
+    return res.status(400).json({
+      mensaje: estado === "Cancelada"
+        ? "Indica un motivo de cancelación de hasta 1000 caracteres."
+        : "El identificador o el estado de la ceremonia no son válidos.",
+    });
+  }
+
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query("BEGIN");
+    const ceremonia = await client.query(
+      `SELECT cg.estado, e.id_admin_gestion AS id_admin_responsable
+       FROM ceremonia_grado cg
+       JOIN evento_institucional e ON e.id_evento = cg.id_evento
+       WHERE cg.id_ceremonia = $1
+       FOR UPDATE OF cg`,
+      [idCeremonia]
+    );
+    if (ceremonia.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ mensaje: "No se encontró la ceremonia." });
+    }
+
+    const estadoAnterior = ceremonia.rows[0].estado;
+    const restablecimientoPruebas =
+      estadoAnterior === "Finalizada" && estado === "Programada";
+    if (restablecimientoPruebas && process.env.NODE_ENV === "production") {
+      await client.query("ROLLBACK");
+      return res.status(403).json({
+        mensaje: "El restablecimiento de ceremonias solo está disponible durante las pruebas.",
+      });
+    }
+    if (!transicionesCeremonia[estadoAnterior]?.includes(estado)) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        mensaje: `No se puede cambiar una ceremonia de "${estadoAnterior}" a "${estado}".`,
+      });
+    }
+
+    let sesionesFinalizadas = 0;
+    if (estado === "Finalizada" || estado === "Cancelada") {
+      const sesiones = await client.query(
+        `UPDATE sesion
+         SET estado = 'Finalizada'
+         WHERE id_ceremonia = $1
+           AND estado IN ('Pendiente', 'En curso')
+         RETURNING id_sesion`,
+        [idCeremonia]
+      );
+      sesionesFinalizadas = sesiones.rowCount;
+    } else if (restablecimientoPruebas) {
+      await client.query(
+        `UPDATE sesion
+         SET estado = 'Pendiente'
+         WHERE id_ceremonia = $1
+           AND estado IN ('En curso', 'Finalizada')`,
+        [idCeremonia]
+      );
+    }
+
+    const actualizada = await client.query(
+      `UPDATE ceremonia_grado
+       SET estado = $1
+       WHERE id_ceremonia = $2
+       RETURNING id_ceremonia::text AS id, estado`,
+      [estado, idCeremonia]
+    );
+    if (!restablecimientoPruebas) {
+      const accion = estado === "En curso"
+        ? "Iniciar"
+        : estado === "Finalizada" ? "Finalizar" : "Cancelar";
+      await client.query(
+        `INSERT INTO historial_estado_ceremonia
+           (id_ceremonia, id_admin_responsable, accion, estado_anterior, estado_nuevo, motivo)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          idCeremonia,
+          ceremonia.rows[0].id_admin_responsable,
+          accion,
+          estadoAnterior,
+          estado,
+          estado === "Cancelada" ? motivo : null,
+        ]
+      );
+    }
+    await client.query("COMMIT");
+    return res.json({
+      ...actualizada.rows[0],
+      sesionesFinalizadas,
+    });
+  } catch (error) {
+    if (client) {
+      await client.query("ROLLBACK").catch((rollbackError) => {
+        console.error("Error al revertir el cambio de estado de la ceremonia:", rollbackError);
+      });
+    }
+    console.error("Error al cambiar el estado de la ceremonia:", error);
+    return res.status(500).json({ mensaje: "No fue posible cambiar el estado de la ceremonia." });
+  } finally {
+    client?.release();
+  }
+});
+
+app.patch("/api/ceremonias/:id/cupo-invitados", async (req, res) => {
+  const idCeremonia = Number(req.params.id);
+  const cupoInvitados = req.body && typeof req.body === "object" && !Array.isArray(req.body)
+    ? req.body.cupoInvitados
+    : null;
+  if (
+    !Number.isSafeInteger(idCeremonia) || idCeremonia <= 0 ||
+    !Number.isSafeInteger(cupoInvitados) || cupoInvitados < 0
+  ) {
+    return res.status(400).json({ mensaje: "El cupo de invitados debe ser un entero igual o mayor que cero." });
+  }
+
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query("BEGIN");
+    const ceremonia = await client.query(
+      "SELECT id_ceremonia FROM ceremonia_grado WHERE id_ceremonia = $1 FOR UPDATE",
+      [idCeremonia]
+    );
+    if (ceremonia.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ mensaje: "No se encontró la ceremonia." });
+    }
+    await client.query("SELECT pg_advisory_xact_lock($1, $2)", [51, idCeremonia]);
+    const actualizados = await client.query(
+      `UPDATE ceremonia_grado
+       SET cupo_invitados = $1
+       WHERE id_ceremonia = $2
+       RETURNING id_ceremonia::text AS id, cupo_invitados AS "cupoInvitados"`,
+      [cupoInvitados, idCeremonia]
+    );
+    const conteo = await client.query(
+      `SELECT COUNT(*)::int AS registrados
+       FROM invitado i
+       JOIN graduando g ON g.id_graduando = i.id_graduando
+       WHERE g.id_ceremonia = $1`,
+      [idCeremonia]
+    );
+    await client.query("COMMIT");
+    const registrados = conteo.rows[0].registrados;
+    return res.json({
+      ...actualizados.rows[0],
+      invitadosRegistrados: registrados,
+      invitadosExcedidos: Math.max(0, registrados - cupoInvitados),
+    });
+  } catch (error) {
+    if (client) {
+      await client.query("ROLLBACK").catch((rollbackError) => {
+        console.error("Error al revertir la actualización del cupo:", rollbackError);
+      });
+    }
+    console.error("Error al actualizar el cupo de invitados:", error);
+    return res.status(500).json({ mensaje: "No fue posible actualizar el cupo de invitados." });
+  } finally {
+    client?.release();
+  }
+});
+
+app.get("/api/ceremonias/:id/fotografias", async (req, res) => {
+  const idCeremonia = Number(req.params.id);
+  if (!Number.isSafeInteger(idCeremonia) || idCeremonia <= 0) {
+    return res.status(400).json({ mensaje: "El identificador de la ceremonia no es válido." });
+  }
+
+  try {
+    const resultado = await pool.query(
+      `SELECT ${columnasEvidenciaFotografica.join(", ")}
+       FROM ceremonia_grado
+       WHERE id_ceremonia = $1`,
+      [idCeremonia]
+    );
+    if (resultado.rows.length === 0) {
+      return res.status(404).json({ mensaje: "No se encontró la ceremonia." });
+    }
+
+    const fotos = [];
+    for (const [indice, columna] of columnasEvidenciaFotografica.entries()) {
+      const buffer = resultado.rows[0][columna];
+      if (!buffer) continue;
+      const mimeType = obtenerMimeImagen(buffer);
+      if (!mimeType) {
+        console.error(`La evidencia fotográfica ${indice + 1} de la ceremonia ${idCeremonia} no es una imagen reconocida.`);
+        return res.status(500).json({ mensaje: "No fue posible leer una de las fotografías de la ceremonia." });
+      }
+      fotos.push({
+        slot: indice + 1,
+        mimeType,
+        base64: buffer.toString("base64"),
+      });
+    }
+    return res.json({ fotos });
+  } catch (error) {
+    console.error("Error al consultar las fotografías de la ceremonia:", error);
+    return res.status(500).json({ mensaje: "No fue posible consultar las fotografías de la ceremonia." });
+  }
+});
+
+app.patch("/api/ceremonias/:id/fotografias", async (req, res) => {
+  const idCeremonia = Number(req.params.id);
+  const entrada = req.body && typeof req.body === "object" && !Array.isArray(req.body)
+    ? req.body.fotos
+    : null;
+  if (
+    !Number.isSafeInteger(idCeremonia) ||
+    idCeremonia <= 0 ||
+    !Array.isArray(entrada) ||
+    entrada.length < 1 ||
+    entrada.length > columnasEvidenciaFotografica.length
+  ) {
+    return res.status(400).json({ mensaje: "La ceremonia o las fotografías no son válidas." });
+  }
+
+  const fotos = [];
+  for (const foto of entrada) {
+    if (
+      !foto ||
+      typeof foto !== "object" ||
+      typeof foto.base64 !== "string" ||
+      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(foto.base64)
+    ) {
+      return res.status(400).json({ mensaje: "Una de las fotografías no tiene un formato válido." });
+    }
+    const buffer = Buffer.from(foto.base64, "base64");
+    if (
+      buffer.length === 0 ||
+      buffer.length > 3 * 1024 * 1024 ||
+      buffer.toString("base64") !== foto.base64
+    ) {
+      return res.status(400).json({ mensaje: "Cada fotografía debe ocupar como máximo 3 MB." });
+    }
+    const mimeType = obtenerMimeImagen(buffer);
+    const mimeSolicitado = foto.mimeType === "image/jpg" ? "image/jpeg" : foto.mimeType;
+    if (!mimeType || (mimeSolicitado && mimeSolicitado !== mimeType)) {
+      return res.status(400).json({ mensaje: "Solo se permiten imágenes PNG, JPEG, WEBP o GIF válidas." });
+    }
+    fotos.push(buffer);
+  }
+
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query("BEGIN");
+    const ceremonia = await client.query(
+      `SELECT ${columnasEvidenciaFotografica.join(", ")}
+       FROM ceremonia_grado
+       WHERE id_ceremonia = $1
+       FOR UPDATE`,
+      [idCeremonia]
+    );
+    if (ceremonia.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ mensaje: "No se encontró la ceremonia." });
+    }
+
+    const espaciosDisponibles = columnasEvidenciaFotografica
+      .map((columna, indice) => ({ columna, indice }))
+      .filter(({ columna }) => ceremonia.rows[0][columna] == null);
+    if (fotos.length > espaciosDisponibles.length) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ mensaje: "La ceremonia no tiene suficientes espacios para guardar esas fotografías." });
+    }
+
+    for (const [indice, buffer] of fotos.entries()) {
+      const columna = espaciosDisponibles[indice].columna;
+      await client.query(
+        `UPDATE ceremonia_grado SET ${columna} = $1 WHERE id_ceremonia = $2`,
+        [buffer, idCeremonia]
+      );
+    }
+    await client.query("COMMIT");
+    return res.status(201).json({
+      guardadas: fotos.length,
+      espaciosDisponibles: espaciosDisponibles.length - fotos.length,
+    });
+  } catch (error) {
+    if (client) {
+      await client.query("ROLLBACK").catch((rollbackError) => {
+        console.error("Error al revertir el registro fotográfico:", rollbackError);
+      });
+    }
+    console.error("Error al guardar las fotografías de la ceremonia:", error);
+    return res.status(500).json({ mensaje: "No fue posible guardar las fotografías de la ceremonia." });
+  } finally {
+    client?.release();
   }
 });
 
@@ -391,12 +739,28 @@ app.patch("/api/sesiones/:id", async (req, res) => {
     client = await pool.connect();
     await client.query("BEGIN");
     const sesion = await client.query(
-      "SELECT id_sesion FROM sesion WHERE id_sesion = $1 FOR UPDATE",
+      "SELECT id_sesion, estado FROM sesion WHERE id_sesion = $1 FOR UPDATE",
       [idSesion]
     );
     if (sesion.rows.length === 0) {
       await client.query("ROLLBACK");
       return res.status(404).json({ mensaje: "No se encontró la sesión." });
+    }
+    const estadoActual = sesion.rows[0].estado;
+    const indiceEstadoActual = ordenEstadosSesion.indexOf(estadoActual);
+    const indiceEstadoNuevo = ordenEstadosSesion.indexOf(estado);
+    if (
+      indiceEstadoActual < 0 ||
+      indiceEstadoNuevo < 0 ||
+      (process.env.NODE_ENV === "production" && (
+        indiceEstadoNuevo < indiceEstadoActual ||
+        indiceEstadoNuevo > indiceEstadoActual + 1
+      ))
+    ) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        mensaje: `No se puede cambiar una sesión de "${estadoActual}" a "${estado}".`,
+      });
     }
 
     const programasUnicos = [...new Set(programas.map((programa) => programa.trim()))];
@@ -480,14 +844,41 @@ const consultaGraduando = `
 
 const normalizarDocumento = (documento) => documento.replace(/\D/g, "");
 
+async function obtenerDocumentosExistentes(
+  client,
+  idCeremonia,
+  documentos,
+  { idGraduandoExcluir = null, idInvitadoExcluir = null } = {}
+) {
+  if (documentos.length === 0) return new Set();
+  const resultado = await client.query(
+    `SELECT regexp_replace(g.identificacion, '[^0-9]', '', 'g') AS documento
+     FROM graduando g
+     WHERE g.id_ceremonia = $1
+       AND ($3::integer IS NULL OR g.id_graduando <> $3)
+       AND regexp_replace(g.identificacion, '[^0-9]', '', 'g') = ANY($2::text[])
+     UNION
+     SELECT regexp_replace(i.identificacion, '[^0-9]', '', 'g') AS documento
+     FROM invitado i
+     JOIN graduando g ON g.id_graduando = i.id_graduando
+     WHERE g.id_ceremonia = $1
+       AND ($4::integer IS NULL OR i.id_invitado <> $4)
+       AND regexp_replace(i.identificacion, '[^0-9]', '', 'g') = ANY($2::text[])`,
+    [idCeremonia, documentos, idGraduandoExcluir, idInvitadoExcluir]
+  );
+  return new Set(resultado.rows.map((fila) => fila.documento));
+}
+
 const consultaInvitado = `
   SELECT i.id_invitado::text AS id,
          g.id_graduando::text AS "graduandoId",
          g.id_ceremonia::text AS "ceremoniaId",
          i.nombre,
          COALESCE(i.identificacion, '') AS documento,
+         COALESCE(to_jsonb(i)->>'telefono', '') AS telefono,
+         COALESCE(to_jsonb(i)->>'parentesco', 'Familiar') AS parentesco,
          CONCAT(g.nombres, ' ', g.apellidos) AS "graduandoNombre",
-         'Familiar'::text AS tipo,
+         COALESCE(to_jsonb(i)->>'parentesco', 'Familiar') AS tipo,
          CASE WHEN i.autorizado THEN 'Autorizado' ELSE 'Pendiente' END AS autorizacion,
          CASE WHEN ingreso.ingreso IS TRUE THEN 'Ingresó' ELSE 'Pendiente' END AS "estadoIngreso",
          CASE WHEN ingreso.ingreso IS TRUE
@@ -504,6 +895,18 @@ const consultaInvitado = `
     LIMIT 1
   ) ingreso ON TRUE
 `;
+
+async function obtenerColumnasOpcionalesInvitado(db) {
+  const resultado = await db.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = current_schema()
+       AND table_name = 'invitado'
+       AND column_name = ANY($1::text[])`,
+    [["telefono", "parentesco"]]
+  );
+  return new Set(resultado.rows.map((fila) => fila.column_name));
+}
 
 async function consultarEstadisticasControlIngreso(db, idCeremonia, idSesion) {
   const resultado = await db.query(
@@ -553,6 +956,25 @@ async function consultarEstadisticasControlIngreso(db, idCeremonia, idSesion) {
 
 async function insertarControlIngreso(db, idSesion, tipoPersona, idPersona) {
   const columna = tipoPersona === "graduando" ? "id_graduando" : "id_invitado";
+  const buscarIngresoExistente = () => db.query(
+    `SELECT TO_CHAR(hora_ingreso, 'FMHH12:MI AM') AS "horaIngreso"
+     FROM control_ingreso
+     WHERE id_sesion = $1
+       AND ${columna} = $2
+       AND ingreso = TRUE
+     ORDER BY id_control_ingreso
+     LIMIT 1`,
+    [idSesion, idPersona]
+  );
+  const registroExistente = await buscarIngresoExistente();
+  if (registroExistente.rows.length > 0) {
+    return {
+      yaIngreso: true,
+      mensaje: "Ya ingresó",
+      horaIngreso: registroExistente.rows[0].horaIngreso,
+    };
+  }
+
   const insertado = await db.query(
     `INSERT INTO control_ingreso (id_sesion, ${columna}, ingreso, hora_ingreso)
      VALUES ($1, $2, TRUE, CURRENT_TIME)
@@ -568,16 +990,7 @@ async function insertarControlIngreso(db, idSesion, tipoPersona, idPersona) {
     };
   }
 
-  const existente = await db.query(
-    `SELECT TO_CHAR(hora_ingreso, 'FMHH12:MI AM') AS "horaIngreso"
-     FROM control_ingreso
-     WHERE id_sesion = $1
-       AND ${columna} = $2
-       AND ingreso = TRUE
-     ORDER BY id_control_ingreso
-     LIMIT 1`,
-    [idSesion, idPersona]
-  );
+  const existente = await buscarIngresoExistente();
   if (existente.rows.length > 0) {
     return {
       yaIngreso: true,
@@ -736,8 +1149,10 @@ app.get("/api/ceremonias/:id/control-ingreso/graduandos/:graduandoId/invitados",
               g.id_ceremonia::text AS "ceremoniaId",
               i.nombre,
               COALESCE(i.identificacion, '') AS documento,
+              COALESCE(to_jsonb(i)->>'telefono', '') AS telefono,
+              COALESCE(to_jsonb(i)->>'parentesco', 'Familiar') AS parentesco,
               CONCAT(g.nombres, ' ', g.apellidos) AS "graduandoNombre",
-              'Familiar'::text AS tipo,
+              COALESCE(to_jsonb(i)->>'parentesco', 'Familiar') AS tipo,
               'Autorizado'::text AS autorizacion,
               CASE WHEN control.id_control_ingreso IS NULL THEN 'Pendiente' ELSE 'Ingresó' END AS "estadoIngreso",
               control."horaIngreso"
@@ -938,15 +1353,11 @@ async function analizarImportacionGraduandos(client, idCeremonia, filas) {
   const documentos = [...new Set(
     filas.map((fila) => normalizarDocumento(fila.identificacion)).filter(Boolean)
   )];
-  const duplicadosBase = documentos.length > 0
-    ? await client.query(
-      `SELECT regexp_replace(identificacion, '[^0-9]', '', 'g') AS documento
-       FROM graduando
-       WHERE id_ceremonia = $1
-         AND regexp_replace(identificacion, '[^0-9]', '', 'g') = ANY($2::text[])`,
-      [idCeremonia, documentos]
-    )
-    : { rows: [] };
+  const documentosExistentes = await obtenerDocumentosExistentes(
+    client,
+    idCeremonia,
+    documentos
+  );
 
   const programasPorNombre = new Map();
   for (const programa of programasResultado.rows) {
@@ -975,9 +1386,6 @@ async function analizarImportacionGraduandos(client, idCeremonia, filas) {
     filasPorDocumento.set(documento, ocurrencias);
   }
 
-  const documentosExistentes = new Set(
-    duplicadosBase.rows.map((fila) => fila.documento)
-  );
   const validas = [];
   const reporte = [];
 
@@ -1163,6 +1571,91 @@ app.get("/api/graduandos/documento/:documento", async (req, res) => {
   }
 });
 
+app.post("/api/registro-invitados/login", async (req, res) => {
+  const cuerpo = req.body;
+  if (!cuerpo || typeof cuerpo !== "object" || Array.isArray(cuerpo)) {
+    return res.status(400).json({ mensaje: "Las credenciales no son válidas." });
+  }
+
+  const documento = typeof cuerpo.documento === "string"
+    ? normalizarDocumento(cuerpo.documento)
+    : "";
+  const codigoEstudiantil = typeof cuerpo.codigoEstudiantil === "string"
+    ? normalizarDocumento(cuerpo.codigoEstudiantil)
+    : "";
+  if (
+    documento.length < 6 || documento.length > 50 ||
+    codigoEstudiantil.length < 4 || codigoEstudiantil.length > 50
+  ) {
+    return res.status(400).json({ mensaje: "Ingresa un documento y código estudiantil válidos." });
+  }
+
+  try {
+    const resultado = await pool.query(
+      `SELECT g.id_graduando,
+              g.id_ceremonia,
+              g.nombres,
+              g.apellidos,
+              g.identificacion,
+              g.codigo_estudiantil,
+              g.requisitos_cumplidos,
+              cg.estado AS estado_ceremonia,
+              cg.cupo_invitados,
+              (SELECT COUNT(*)::int
+               FROM invitado i
+               WHERE i.id_graduando = g.id_graduando) AS invitados_registrados,
+              COALESCE(
+                (SELECT STRING_AGG(p.nombre, ', ' ORDER BY p.nombre)
+                 FROM graduando_programa gp
+                 JOIN programa p ON p.id_programa = gp.id_programa
+                 WHERE gp.id_graduando = g.id_graduando),
+                'Sin programa'
+              ) AS programa
+       FROM graduando g
+       JOIN ceremonia_grado cg ON cg.id_ceremonia = g.id_ceremonia
+       WHERE regexp_replace(g.identificacion, '[^0-9]', '', 'g') = $1
+         AND regexp_replace(COALESCE(g.codigo_estudiantil, ''), '[^0-9]', '', 'g') = $2
+       ORDER BY g.id_graduando
+       LIMIT 2`,
+      [documento, codigoEstudiantil]
+    );
+
+    if (resultado.rows.length === 0) {
+      return res.status(401).json({ mensaje: "El documento o código estudiantil no es correcto." });
+    }
+    if (resultado.rows.length > 1) {
+      return res.status(409).json({ mensaje: "Las credenciales no identifican un único graduando." });
+    }
+
+    const graduando = resultado.rows[0];
+    if (!estadosCeremoniaActivasRegistroInvitados.includes(graduando.estado_ceremonia)) {
+      return res.status(403).json({
+        mensaje: "El registro de invitados para esta ceremonia está cerrado",
+      });
+    }
+    if (graduando.requisitos_cumplidos !== true) {
+      return res.status(403).json({
+        mensaje: "No cumples los requisitos para registrar invitados. Contacta a Medios Educativos.",
+      });
+    }
+
+    return res.json({
+      id: String(graduando.id_graduando),
+      ceremoniaId: String(graduando.id_ceremonia),
+      nombres: graduando.nombres,
+      apellidos: graduando.apellidos,
+      documento: normalizarDocumento(graduando.identificacion),
+      codigoEstudiantil: graduando.codigo_estudiantil || "",
+      programa: graduando.programa,
+      cupoInvitados: graduando.cupo_invitados,
+      invitadosRegistrados: graduando.invitados_registrados,
+    });
+  } catch (error) {
+    console.error("Error al validar el acceso al registro de invitados:", error);
+    return res.status(500).json({ mensaje: "No fue posible validar el acceso al registro de invitados." });
+  }
+});
+
 app.get("/api/graduandos/:id", async (req, res) => {
   const idGraduando = Number(req.params.id);
   if (!Number.isSafeInteger(idGraduando) || idGraduando <= 0) {
@@ -1215,56 +1708,204 @@ app.get("/api/ceremonias/:id/invitados", async (req, res) => {
   }
 });
 
-app.post("/api/graduandos/:id/invitados", async (req, res) => {
-  const idGraduando = Number(req.params.id);
-  const cuerpo = req.body || {};
-  const nombre = typeof cuerpo.nombre === "string" ? cuerpo.nombre.trim() : "";
-  const documento = typeof cuerpo.documento === "string"
-    ? normalizarDocumento(cuerpo.documento)
-    : "";
-  const autorizado = cuerpo.autorizacion === "Autorizado";
+const MAX_INVITADOS_POR_REGISTRO = 100;
+
+function validarInvitadosEntrada(filas) {
   if (
-    !Number.isSafeInteger(idGraduando) || idGraduando <= 0 ||
-    !nombre || nombre.length > 150 || documento.length > 50 ||
-    !["Autorizado", "Pendiente"].includes(cuerpo.autorizacion)
+    !Array.isArray(filas) ||
+    filas.length === 0 ||
+    filas.length > MAX_INVITADOS_POR_REGISTRO
   ) {
-    return res.status(400).json({ mensaje: "Verifica el nombre, documento y autorización del invitado." });
+    return { mensaje: `El registro debe contener entre 1 y ${MAX_INVITADOS_POR_REGISTRO} invitados.` };
   }
 
+  const invitados = [];
+  for (const fila of filas) {
+    if (!fila || typeof fila !== "object" || Array.isArray(fila)) {
+      return { mensaje: "Uno o más invitados tienen datos no válidos." };
+    }
+    const nombre = typeof fila.nombre === "string" ? fila.nombre.trim() : "";
+    const documento = typeof fila.documento === "string"
+      ? normalizarDocumento(fila.documento)
+      : "";
+    const telefono = fila.telefono === undefined
+      ? ""
+      : typeof fila.telefono === "string" ? fila.telefono.trim() : null;
+    const parentesco = fila.parentesco === undefined
+      ? typeof fila.tipo === "string" ? fila.tipo.trim() : ""
+      : typeof fila.parentesco === "string" ? fila.parentesco.trim() : null;
+    if (
+      !nombre || nombre.length > 150 ||
+      !documento || documento.length > 50 ||
+      telefono === null || telefono.length > 50 ||
+      parentesco === null || parentesco.length > 100 ||
+      !["Autorizado", "Pendiente"].includes(fila.autorizacion)
+    ) {
+      return { mensaje: "Verifica el nombre, documento y autorización del invitado." };
+    }
+    invitados.push({
+      nombre,
+      documento,
+      telefono: telefono || null,
+      parentesco: parentesco || null,
+      autorizado: fila.autorizacion === "Autorizado",
+    });
+  }
+  return { invitados };
+}
+
+async function registrarInvitadosEnTransaccion(idGraduando, invitados) {
   let client;
   try {
     client = await pool.connect();
     await client.query("BEGIN");
     const graduando = await client.query(
-      "SELECT id_graduando FROM graduando WHERE id_graduando = $1 FOR UPDATE",
+      `SELECT g.id_graduando, g.id_ceremonia, g.requisitos_cumplidos,
+              cg.estado AS estado_ceremonia, cg.cupo_invitados
+       FROM graduando g
+       JOIN ceremonia_grado cg ON cg.id_ceremonia = g.id_ceremonia
+       WHERE g.id_graduando = $1
+       FOR UPDATE OF g, cg`,
       [idGraduando]
     );
     if (graduando.rows.length === 0) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ mensaje: "No se encontró el graduando." });
+      return { status: 404, mensaje: "No se encontró el graduando." };
     }
-    const creado = await client.query(
-      `INSERT INTO invitado (id_graduando, nombre, identificacion, autorizado)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id_invitado`,
-      [idGraduando, nombre, documento || null, autorizado]
+
+    const datosGraduando = graduando.rows[0];
+    await client.query(
+      "SELECT pg_advisory_xact_lock($1, $2)",
+      [51, datosGraduando.id_ceremonia]
     );
-    const resultado = await client.query(
-      `${consultaInvitado} WHERE i.id_invitado = $1`,
-      [creado.rows[0].id_invitado]
+    if (!estadosCeremoniaActivasRegistroInvitados.includes(datosGraduando.estado_ceremonia)) {
+      await client.query("ROLLBACK");
+      return {
+        status: 403,
+        mensaje: "El registro de invitados para esta ceremonia está cerrado",
+      };
+    }
+    if (datosGraduando.requisitos_cumplidos !== true) {
+      await client.query("ROLLBACK");
+      return {
+        status: 403,
+        mensaje: "No cumples los requisitos para registrar invitados. Contacta a Medios Educativos.",
+      };
+    }
+
+    const conteo = await client.query(
+      `SELECT COUNT(*)::int AS registrados
+       FROM invitado i
+       JOIN graduando g ON g.id_graduando = i.id_graduando
+       WHERE g.id_ceremonia = $1`,
+      [datosGraduando.id_ceremonia]
     );
+    if (conteo.rows[0].registrados + invitados.length > datosGraduando.cupo_invitados) {
+      await client.query("ROLLBACK");
+      return {
+        status: 409,
+        mensaje: `El cupo de invitados es ${datosGraduando.cupo_invitados}; ya hay ${conteo.rows[0].registrados} registrados.`,
+      };
+    }
+
+    const documentos = invitados.map((invitado) => invitado.documento);
+    if (new Set(documentos).size !== documentos.length) {
+      await client.query("ROLLBACK");
+      return { status: 409, mensaje: "Hay documentos duplicados en el registro." };
+    }
+    const documentosExistentes = await obtenerDocumentosExistentes(
+      client,
+      datosGraduando.id_ceremonia,
+      documentos
+    );
+    if (documentos.some((documento) => documentosExistentes.has(documento))) {
+      await client.query("ROLLBACK");
+      return {
+        status: 409,
+        mensaje: "Uno o más documentos ya están registrados en esta ceremonia.",
+      };
+    }
+
+    const columnasOpcionales = await obtenerColumnasOpcionalesInvitado(client);
+    const registros = [];
+    for (const invitado of invitados) {
+      const columnas = ["id_graduando", "nombre", "identificacion"];
+      const valores = [idGraduando, invitado.nombre, invitado.documento];
+      if (columnasOpcionales.has("telefono")) {
+        columnas.push("telefono");
+        valores.push(invitado.telefono);
+      }
+      if (columnasOpcionales.has("parentesco")) {
+        columnas.push("parentesco");
+        valores.push(invitado.parentesco);
+      }
+      columnas.push("autorizado");
+      valores.push(invitado.autorizado);
+      const creado = await client.query(
+        `INSERT INTO invitado
+           (${columnas.join(", ")})
+         VALUES (${valores.map((_, indice) => `$${indice + 1}`).join(", ")})
+         RETURNING id_invitado`,
+        valores
+      );
+      const resultado = await client.query(
+        `${consultaInvitado} WHERE i.id_invitado = $1`,
+        [creado.rows[0].id_invitado]
+      );
+      registros.push(resultado.rows[0]);
+    }
+
     await client.query("COMMIT");
-    return res.status(201).json(resultado.rows[0]);
+    return { registros };
   } catch (error) {
     if (client) {
       await client.query("ROLLBACK").catch((rollbackError) => {
-        console.error("Error al revertir la creación del invitado:", rollbackError);
+        console.error("Error al revertir el registro de invitados:", rollbackError);
       });
     }
-    console.error("Error al crear el invitado:", error);
-    return res.status(500).json({ mensaje: "Error al guardar el invitado." });
+    throw error;
   } finally {
     client?.release();
+  }
+}
+
+app.post("/api/graduandos/:id/invitados", async (req, res) => {
+  const idGraduando = Number(req.params.id);
+  if (!Number.isSafeInteger(idGraduando) || idGraduando <= 0) {
+    return res.status(400).json({ mensaje: "El identificador del graduando no es válido." });
+  }
+  const entrada = validarInvitadosEntrada([req.body]);
+  if (entrada.mensaje) return res.status(400).json({ mensaje: entrada.mensaje });
+
+  try {
+    const resultado = await registrarInvitadosEnTransaccion(idGraduando, entrada.invitados);
+    if (resultado.mensaje) return res.status(resultado.status).json({ mensaje: resultado.mensaje });
+    return res.status(201).json(resultado.registros[0]);
+  } catch (error) {
+    console.error("Error al crear el invitado:", error);
+    return res.status(500).json({ mensaje: "Error al guardar el invitado." });
+  }
+});
+
+app.post("/api/graduandos/:id/invitados/lote", async (req, res) => {
+  const idGraduando = Number(req.params.id);
+  const entrada = validarInvitadosEntrada(
+    req.body && typeof req.body === "object" && !Array.isArray(req.body)
+      ? req.body.invitados
+      : null
+  );
+  if (!Number.isSafeInteger(idGraduando) || idGraduando <= 0) {
+    return res.status(400).json({ mensaje: "El identificador del graduando no es válido." });
+  }
+  if (entrada.mensaje) return res.status(400).json({ mensaje: entrada.mensaje });
+
+  try {
+    const resultado = await registrarInvitadosEnTransaccion(idGraduando, entrada.invitados);
+    if (resultado.mensaje) return res.status(resultado.status).json({ mensaje: resultado.mensaje });
+    return res.status(201).json(resultado.registros);
+  } catch (error) {
+    console.error("Error al registrar el lote de invitados:", error);
+    return res.status(500).json({ mensaje: "No fue posible guardar los invitados." });
   }
 });
 
@@ -1279,17 +1920,26 @@ app.patch("/api/invitados/:id", async (req, res) => {
   try {
     client = await pool.connect();
     await client.query("BEGIN");
+    const columnasOpcionales = await obtenerColumnasOpcionalesInvitado(client);
     const actual = await client.query(
-      `SELECT nombre, identificacion, autorizado
-       FROM invitado
-       WHERE id_invitado = $1
-       FOR UPDATE`,
+      `SELECT i.nombre, i.identificacion, i.autorizado,
+              COALESCE(to_jsonb(i)->>'telefono', '') AS telefono,
+              COALESCE(to_jsonb(i)->>'parentesco', '') AS parentesco,
+              g.id_ceremonia
+       FROM invitado i
+       JOIN graduando g ON g.id_graduando = i.id_graduando
+       WHERE i.id_invitado = $1
+       FOR UPDATE OF i, g`,
       [idInvitado]
     );
     if (actual.rows.length === 0) {
       await client.query("ROLLBACK");
       return res.status(404).json({ mensaje: "No se encontró el invitado." });
     }
+    await client.query(
+      "SELECT pg_advisory_xact_lock($1, $2)",
+      [51, actual.rows[0].id_ceremonia]
+    );
     const nombre = cuerpo.nombre === undefined
       ? actual.rows[0].nombre
       : typeof cuerpo.nombre === "string" ? cuerpo.nombre.trim() : "";
@@ -1299,21 +1949,51 @@ app.patch("/api/invitados/:id", async (req, res) => {
     const autorizado = cuerpo.autorizacion === undefined
       ? actual.rows[0].autorizado === true
       : cuerpo.autorizacion === "Autorizado";
+    const telefono = cuerpo.telefono === undefined
+      ? actual.rows[0].telefono || ""
+      : typeof cuerpo.telefono === "string" ? cuerpo.telefono.trim() : null;
+    const parentesco = cuerpo.parentesco === undefined
+      ? actual.rows[0].parentesco || ""
+      : typeof cuerpo.parentesco === "string" ? cuerpo.parentesco.trim() : null;
     if (
-      !nombre || nombre.length > 150 || documento.length > 50 ||
+      !nombre || nombre.length > 150 || !documento || documento.length > 50 ||
+      telefono === null || telefono.length > 50 ||
+      parentesco === null || parentesco.length > 100 ||
       (cuerpo.autorizacion !== undefined &&
         !["Autorizado", "Pendiente"].includes(cuerpo.autorizacion)) ||
       (cuerpo.nombre !== undefined && typeof cuerpo.nombre !== "string") ||
-      (cuerpo.documento !== undefined && typeof cuerpo.documento !== "string")
+      (cuerpo.documento !== undefined && typeof cuerpo.documento !== "string") ||
+      (cuerpo.telefono !== undefined && typeof cuerpo.telefono !== "string") ||
+      (cuerpo.parentesco !== undefined && typeof cuerpo.parentesco !== "string")
     ) {
       await client.query("ROLLBACK");
       return res.status(400).json({ mensaje: "Verifica el nombre, documento y autorización del invitado." });
     }
+    const documentosExistentes = await obtenerDocumentosExistentes(
+      client,
+      actual.rows[0].id_ceremonia,
+      [documento],
+      { idInvitadoExcluir: idInvitado }
+    );
+    if (documentosExistentes.has(documento)) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ mensaje: "El documento ya está registrado en esta ceremonia." });
+    }
+    const actualizaciones = ["nombre = $2", "identificacion = $3", "autorizado = $4"];
+    const valoresActualizacion = [idInvitado, nombre, documento, autorizado];
+    if (columnasOpcionales.has("telefono")) {
+      valoresActualizacion.push(telefono || null);
+      actualizaciones.push(`telefono = $${valoresActualizacion.length}`);
+    }
+    if (columnasOpcionales.has("parentesco")) {
+      valoresActualizacion.push(parentesco || null);
+      actualizaciones.push(`parentesco = $${valoresActualizacion.length}`);
+    }
     await client.query(
       `UPDATE invitado
-       SET nombre = $2, identificacion = $3, autorizado = $4
+       SET ${actualizaciones.join(", ")}
        WHERE id_invitado = $1`,
-      [idInvitado, nombre, documento || null, autorizado]
+      valoresActualizacion
     );
     const resultado = await client.query(
       `${consultaInvitado} WHERE i.id_invitado = $1`,
@@ -1615,16 +2295,14 @@ app.post("/api/ceremonias/:id/graduandos", async (req, res) => {
       return res.status(404).json({ mensaje: "No se encontró la ceremonia." });
     }
     await client.query("SELECT pg_advisory_xact_lock($1, $2)", [51, idCeremonia]);
-    const duplicado = await client.query(
-      `SELECT 1 FROM graduando
-       WHERE id_ceremonia = $1
-         AND regexp_replace(identificacion, '[^0-9]', '', 'g') = $2
-       LIMIT 1`,
-      [idCeremonia, graduando.documento]
+    const documentosExistentes = await obtenerDocumentosExistentes(
+      client,
+      idCeremonia,
+      [graduando.documento]
     );
-    if (duplicado.rows.length > 0) {
+    if (documentosExistentes.has(graduando.documento)) {
       await client.query("ROLLBACK");
-      return res.status(409).json({ mensaje: "Ya existe un graduando con ese documento en esta ceremonia." });
+      return res.status(409).json({ mensaje: "El documento ya está registrado en esta ceremonia." });
     }
     const programas = await validarProgramasGraduando(client, graduando.programaIds);
     if (programas.mensaje) {
@@ -1702,16 +2380,15 @@ app.patch("/api/graduandos/:id", async (req, res) => {
     }
     const idCeremonia = actual.rows[0].id_ceremonia;
     await client.query("SELECT pg_advisory_xact_lock($1, $2)", [51, idCeremonia]);
-    const duplicado = await client.query(
-      `SELECT 1 FROM graduando
-       WHERE id_ceremonia = $1 AND id_graduando <> $2
-         AND regexp_replace(identificacion, '[^0-9]', '', 'g') = $3
-       LIMIT 1`,
-      [idCeremonia, idGraduando, graduando.documento]
+    const documentosExistentes = await obtenerDocumentosExistentes(
+      client,
+      idCeremonia,
+      [graduando.documento],
+      { idGraduandoExcluir: idGraduando }
     );
-    if (duplicado.rows.length > 0) {
+    if (documentosExistentes.has(graduando.documento)) {
       await client.query("ROLLBACK");
-      return res.status(409).json({ mensaje: "Ya existe otro graduando con ese documento en esta ceremonia." });
+      return res.status(409).json({ mensaje: "El documento ya está registrado en esta ceremonia." });
     }
     const programas = await validarProgramasGraduando(client, graduando.programaIds);
     if (programas.mensaje) {
@@ -1770,7 +2447,9 @@ app.post("/api/ceremonias", async (req, res) => {
   const fecha = typeof cuerpo.fecha === "string" ? cuerpo.fecha : "";
   const idEventoSolicitado = cuerpo.idEvento === undefined ? null : Number(cuerpo.idEvento);
   const idEspacio = Number(cuerpo.idEspacio);
-  const cupoInvitados = Number(cuerpo.cupoInvitados);
+  const cupoInvitados = cuerpo.cupoInvitados === undefined
+    ? 2
+    : Number(cuerpo.cupoInvitados);
   const estado = cuerpo.estado;
   const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(fecha) &&
     (() => {
@@ -1787,7 +2466,7 @@ app.post("/api/ceremonias", async (req, res) => {
       (!Number.isSafeInteger(idEventoSolicitado) || idEventoSolicitado <= 0)) ||
     !Number.isSafeInteger(idEspacio) || idEspacio <= 0 ||
     !Number.isSafeInteger(cupoInvitados) || cupoInvitados < 0 ||
-    !estadosCeremonia.includes(estado)
+    !estadosCeremoniaCreacion.includes(estado)
   ) {
     return res.status(400).json({ mensaje: "Completa los datos de la ceremonia con valores válidos." });
   }

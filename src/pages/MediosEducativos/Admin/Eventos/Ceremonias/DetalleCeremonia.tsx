@@ -1,6 +1,6 @@
 /**
  * Pantalla: Detalle de ceremonia — Resumen
- * Incluye modal Agregar sesión.
+ *  modal Agregar sesión.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -14,29 +14,39 @@ import AddIcon from '@mui/icons-material/Add';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import type { Ceremonia, Sesion } from './interfaces/ceremonias.interface';
 import {
-  getCeremoniaById, getSesiones, addSesion, HORA_OPTIONS,
+  cambiarEstadoCeremonia, getCeremoniaById, getFotografiasCeremonia,
+  getSesiones, addSesion, guardarFotografiasCeremonia, HORA_OPTIONS,
 } from './services/ceremonias.service';
 
-/** Imagen en el registro fotográfico (URL local o placeholder) */
 interface FotoItem {
   id: string;
   url: string;
   name?: string;
+  file?: File;
 }
 
-const FOTOS_INICIALES: FotoItem[] = [
-  { id: 'p1', url: 'gradient:1' },
-  { id: 'p2', url: 'gradient:2' },
-  { id: 'p3', url: 'gradient:3' },
-];
-
-const GRADIENTS: Record<string, string> = {
-  'gradient:1': 'linear-gradient(135deg,#1a3a5c,#4a6fa5)',
-  'gradient:2': 'linear-gradient(135deg,#2c3e50,#7f8c8d)',
-  'gradient:3': 'linear-gradient(135deg,#1e3a5f,#5d8aa8)',
-};
-
 const ACCEPT_IMAGES = 'image/png,image/jpeg,image/jpg,image/webp,image/gif';
+const MAX_FOTO_BYTES = 3 * 1024 * 1024;
+
+function convertirArchivoABase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('No fue posible leer la fotografía.'));
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        reject(new Error('No fue posible leer la fotografía.'));
+        return;
+      }
+      const separator = reader.result.indexOf(',');
+      if (separator < 0) {
+        reject(new Error('No fue posible preparar la fotografía.'));
+        return;
+      }
+      resolve(reader.result.slice(separator + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function DetalleCeremonia() {
   const { id } = useParams<{ id: string }>();
@@ -51,13 +61,27 @@ export default function DetalleCeremonia() {
   const [horaFin, setHoraFin] = useState('');
   const [saving, setSaving] = useState(false);
   const [sesionError, setSesionError] = useState('');
+  const [savingEstadoCeremonia, setSavingEstadoCeremonia] = useState(false);
+  const [estadoCeremoniaError, setEstadoCeremoniaError] = useState('');
 
   /* Registro fotográfico */
-  const [fotos, setFotos] = useState<FotoItem[]>(FOTOS_INICIALES);
+  const [fotosCeremonia, setFotosCeremonia] = useState<{
+    id: string;
+    items: FotoItem[];
+  } | null>(null);
+  const [fotosCargadasId, setFotosCargadasId] = useState<string | null>(null);
+  const [fotoErrorActual, setFotoErrorActual] = useState<{ id: string; mensaje: string } | null>(null);
+  const [savingFotos, setSavingFotos] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [pendingFotos, setPendingFotos] = useState<FotoItem[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fotos = fotosCeremonia && fotosCeremonia.id === id ? fotosCeremonia.items : [];
+  const fotosCargadas = fotosCargadasId === id;
+  const fotoError = fotoErrorActual && fotoErrorActual.id === id ? fotoErrorActual.mensaje : '';
+  const setFotoError = (mensaje: string) => {
+    if (id) setFotoErrorActual({ id, mensaje });
+  };
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -72,6 +96,68 @@ export default function DetalleCeremonia() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleAvanzarEstadoCeremonia = async () => {
+    if (!id || !ceremonia || savingEstadoCeremonia) return;
+    const siguienteEstado = ceremonia.estado === 'Programada'
+      ? 'En curso'
+      : ceremonia.estado === 'En curso'
+        ? 'Finalizada'
+        : ceremonia.estado === 'Finalizada' && import.meta.env.DEV ? 'Programada' : null;
+    if (!siguienteEstado) return;
+
+    setSavingEstadoCeremonia(true);
+    setEstadoCeremoniaError('');
+    try {
+      const resultado = await cambiarEstadoCeremonia(id, siguienteEstado);
+      setCeremonia((actual) => actual ? { ...actual, estado: resultado.estado } : actual);
+      if (resultado.estado === 'Finalizada') {
+        setSesiones((actuales) => actuales.map((sesion) => ({
+          ...sesion,
+          estado: 'Finalizada',
+        })));
+      } else if (resultado.estado === 'Programada' && ceremonia.estado === 'Finalizada') {
+        setSesiones((actuales) => actuales.map((sesion) => ({
+          ...sesion,
+          estado: 'Pendiente',
+        })));
+      }
+    } catch (cause) {
+      setEstadoCeremoniaError(
+        cause instanceof Error ? cause.message : 'No fue posible cambiar el estado de la ceremonia.'
+      );
+    } finally {
+      setSavingEstadoCeremonia(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!id) return;
+    let activa = true;
+    getFotografiasCeremonia(id)
+      .then((resultado) => {
+        if (!activa) return;
+        setFotosCeremonia({
+          id,
+          items: resultado.map((foto) => ({
+            id: String(foto.slot),
+            url: `data:${foto.mimeType};base64,${foto.base64}`,
+            name: `Fotografía ${foto.slot}`,
+          })),
+        });
+        setFotosCargadasId(id);
+        setFotoErrorActual({ id, mensaje: '' });
+      })
+      .catch((cause) => {
+        if (activa) {
+          setFotoErrorActual({
+            id,
+            mensaje: cause instanceof Error ? cause.message : 'No fue posible cargar las fotografías.',
+          });
+        }
+      });
+    return () => { activa = false; };
+  }, [id]);
 
   const handleAddSesion = async () => {
     if (!id) return;
@@ -107,13 +193,31 @@ export default function DetalleCeremonia() {
     /\.(png|jpe?g|webp|gif)$/i.test(file.name);
 
   const processFiles = (fileList: FileList | File[]) => {
+    if (savingFotos) return;
     const files = Array.from(fileList).filter(isImageFile);
-    if (!files.length) return;
+    if (!fotosCargadas) {
+      setFotoError('Espera a que carguen las fotografías de la ceremonia antes de agregar otras.');
+      return;
+    }
+    if (!files.length) {
+      setFotoError('Selecciona al menos una imagen válida.');
+      return;
+    }
+    if (files.some((file) => file.size > MAX_FOTO_BYTES)) {
+      setFotoError('Cada fotografía debe ocupar como máximo 3 MB.');
+      return;
+    }
+    if (fotos.length + pendingFotos.length + files.length > 4) {
+      setFotoError('La ceremonia permite guardar hasta cuatro fotografías.');
+      return;
+    }
     const nuevos: FotoItem[] = files.map((f) => ({
       id: `up-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       url: URL.createObjectURL(f),
       name: f.name,
+      file: f,
     }));
+    setFotoError('');
     setPendingFotos((prev) => [...prev, ...nuevos]);
   };
 
@@ -132,14 +236,37 @@ export default function DetalleCeremonia() {
     e.target.value = '';
   };
 
-  const handleGuardarFotos = () => {
-    if (!pendingFotos.length) return;
-    setFotos((prev) => [...prev, ...pendingFotos]);
-    setPendingFotos([]);
-    setUploadOpen(false);
+  const handleGuardarFotos = async () => {
+    if (!id || !fotosCargadas || !pendingFotos.length || savingFotos) return;
+    setSavingFotos(true);
+    setFotoError('');
+    try {
+      const fotosParaGuardar = await Promise.all(pendingFotos.map(async (foto) => {
+        if (!foto.file) throw new Error('No fue posible leer una de las fotografías seleccionadas.');
+        return {
+          mimeType: foto.file.type,
+          base64: await convertirArchivoABase64(foto.file),
+        };
+      }));
+      await guardarFotografiasCeremonia(id, fotosParaGuardar);
+      setFotosCeremonia((actuales) => ({
+        id,
+        items: [
+          ...(actuales?.id === id ? actuales.items : []),
+          ...pendingFotos.map((foto) => ({ id: foto.id, url: foto.url, name: foto.name })),
+        ],
+      }));
+      setPendingFotos([]);
+      setUploadOpen(false);
+    } catch (cause) {
+      setFotoError(cause instanceof Error ? cause.message : 'No fue posible guardar las fotografías.');
+    } finally {
+      setSavingFotos(false);
+    }
   };
 
   const handleCancelarUpload = () => {
+    if (savingFotos) return;
     pendingFotos.forEach((f) => {
       if (f.url.startsWith('blob:')) URL.revokeObjectURL(f.url);
     });
@@ -149,6 +276,7 @@ export default function DetalleCeremonia() {
   };
 
   const handleQuitarPending = (fotoId: string) => {
+    if (savingFotos) return;
     setPendingFotos((prev) => {
       const item = prev.find((f) => f.id === fotoId);
       if (item?.url.startsWith('blob:')) URL.revokeObjectURL(item.url);
@@ -157,20 +285,6 @@ export default function DetalleCeremonia() {
   };
 
   const renderFotoThumb = (foto: FotoItem, size = { w: 100, h: 70 }) => {
-    if (foto.url.startsWith('gradient:')) {
-      return (
-        <Box
-          key={foto.id}
-          sx={{
-            width: size.w,
-            height: size.h,
-            borderRadius: '8px',
-            background: GRADIENTS[foto.url] || GRADIENTS['gradient:1'],
-            flexShrink: 0,
-          }}
-        />
-      );
-    }
     return (
       <Box
         key={foto.id}
@@ -340,6 +454,11 @@ export default function DetalleCeremonia() {
           <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem', mb: 1.5 }}>
             Evidencias visuales asociadas a la ceremonia.
           </Typography>
+          {fotoError && (
+            <Typography role="alert" sx={{ color: '#B71C1C', fontSize: '0.85rem', mb: 1.5 }}>
+              {fotoError}
+            </Typography>
+          )}
 
           {/* Miniaturas guardadas + botón agregar */}
           {!uploadOpen && (
@@ -503,6 +622,7 @@ export default function DetalleCeremonia() {
                   <Button
                     variant="contained"
                     onClick={handleGuardarFotos}
+                    disabled={savingFotos || !fotosCargadas}
                     sx={{
                       backgroundColor: '#1565C0',
                       textTransform: 'none',
@@ -569,14 +689,51 @@ export default function DetalleCeremonia() {
         px: 2.5, py: 1.75, mt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1,
       }}>
         <Box>
-          <Typography sx={{ fontWeight: 600, fontSize: '0.95rem', color: '#0B1A2A' }}>Finalizar ceremonia</Typography>
-          <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem' }}>Finaliza la ceremonia y guarda su información en el historial.</Typography>
+          <Typography sx={{ fontWeight: 600, fontSize: '0.95rem', color: '#0B1A2A' }}>
+            {ceremonia.estado === 'Programada'
+              ? 'Iniciar ceremonia'
+              : ceremonia.estado === 'En curso'
+                ? 'Finalizar ceremonia'
+                : ceremonia.estado === 'Finalizada' && import.meta.env.DEV
+                  ? 'Restablecer para pruebas'
+                : `Ceremonia ${ceremonia.estado.toLowerCase()}`}
+          </Typography>
+          <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem' }}>
+            {ceremonia.estado === 'Programada'
+              ? 'Inicia la ceremonia.'
+              : ceremonia.estado === 'En curso'
+                ? 'Finaliza la ceremonia y guarda su información en el historial.'
+                : ceremonia.estado === 'Finalizada' && import.meta.env.DEV
+                  ? 'Restablece la ceremonia a Programada y las sesiones a Pendiente. No se registra en el historial.'
+                : 'El estado de la ceremonia es definitivo.'}
+          </Typography>
+          {estadoCeremoniaError && (
+            <Typography role="alert" sx={{ color: '#B42318', fontSize: '0.85rem', mt: 1 }}>
+              {estadoCeremoniaError}
+            </Typography>
+          )}
         </Box>
-        <Button variant="contained" sx={{
-          backgroundColor: '#E30613', textTransform: 'none', fontWeight: 600, borderRadius: '8px', boxShadow: 'none',
-          '&:hover': { backgroundColor: '#C10510', boxShadow: 'none' },
-        }}>
-          Finalizar ceremonia
+        <Button
+          variant="contained"
+          disabled={savingEstadoCeremonia || (
+            !['Programada', 'En curso'].includes(ceremonia.estado) &&
+            !(import.meta.env.DEV && ceremonia.estado === 'Finalizada')
+          )}
+          onClick={() => void handleAvanzarEstadoCeremonia()}
+          sx={{
+            backgroundColor: '#E30613', textTransform: 'none', fontWeight: 600, borderRadius: '8px', boxShadow: 'none',
+            '&:hover': { backgroundColor: '#C10510', boxShadow: 'none' },
+          }}
+        >
+          {savingEstadoCeremonia
+            ? 'Guardando…'
+            : ceremonia.estado === 'Programada'
+              ? 'Iniciar ceremonia'
+              : ceremonia.estado === 'En curso'
+                ? 'Finalizar ceremonia'
+                : ceremonia.estado === 'Finalizada' && import.meta.env.DEV
+                  ? 'Restablecer para pruebas'
+                : `Ceremonia ${ceremonia.estado.toLowerCase()}`}
         </Button>
       </Box>
 
