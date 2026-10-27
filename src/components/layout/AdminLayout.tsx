@@ -22,7 +22,6 @@ const navigation = [
   { label: 'Dependencias', to: '/admin/dependencias', icon: BusinessOutlinedIcon },
   { label: 'Historial', to: '/admin/historial', icon: HistoryOutlinedIcon },
   { label: 'Eventos', to: '/admin/eventos', icon: EventOutlinedIcon },
-  { label: 'Ceremonias', to: '/admin/eventos/ceremonias', icon: EventOutlinedIcon },
 ];
 
 function AdminLayout() {
@@ -67,7 +66,7 @@ function AdminLayout() {
               key={to}
               component={NavLink}
               to={to}
-              end={to === '/admin/dashboard' || to === '/admin/eventos'}
+              end={to === '/admin/dashboard'}
               sx={{
                 display: 'flex',
                 alignItems: 'center',

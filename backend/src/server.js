@@ -1754,7 +1754,7 @@ function validarInvitadosEntrada(filas) {
   return { invitados };
 }
 
-async function registrarInvitadosEnTransaccion(idGraduando, invitados) {
+async function registrarInvitadosEnTransaccion(idGraduando, invitados, requiereRequisitos = true) {
   let client;
   try {
     client = await pool.connect();
@@ -1785,7 +1785,7 @@ async function registrarInvitadosEnTransaccion(idGraduando, invitados) {
         mensaje: "El registro de invitados para esta ceremonia está cerrado",
       };
     }
-    if (datosGraduando.requisitos_cumplidos !== true) {
+    if (requiereRequisitos && datosGraduando.requisitos_cumplidos !== true) {
       await client.query("ROLLBACK");
       return {
         status: 403,
@@ -1878,7 +1878,11 @@ app.post("/api/graduandos/:id/invitados", async (req, res) => {
   if (entrada.mensaje) return res.status(400).json({ mensaje: entrada.mensaje });
 
   try {
-    const resultado = await registrarInvitadosEnTransaccion(idGraduando, entrada.invitados);
+    const resultado = await registrarInvitadosEnTransaccion(
+      idGraduando,
+      entrada.invitados,
+      false
+    );
     if (resultado.mensaje) return res.status(resultado.status).json({ mensaje: resultado.mensaje });
     return res.status(201).json(resultado.registros[0]);
   } catch (error) {

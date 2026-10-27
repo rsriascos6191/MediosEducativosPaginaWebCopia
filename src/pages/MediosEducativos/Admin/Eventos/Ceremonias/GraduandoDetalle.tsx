@@ -205,9 +205,38 @@ export default function GraduandoDetalle() {
           <Typography sx={{ fontWeight: 700, fontSize: '0.95rem', color: '#0B1A2A' }}>Ceremonia de grados</Typography>
           <Typography sx={{ color: '#5A6A7A', fontSize: '0.8rem' }}>Fecha · Lugar</Typography>
         </Box>
-        <Typography sx={{ color: '#1565C0', fontSize: '0.75rem', fontWeight: 600, letterSpacing: 0.5 }}>
-          CEREMONIA → SESIÓN → PROGRAMA → GRADUANDO
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.25 }}>
+          <Button
+            size="small"
+            disabled={!id}
+            onClick={() => navigate(`/admin/eventos/ceremonias/${id}`)}
+            sx={{ color: '#1565C0', fontSize: '0.75rem', fontWeight: 600, letterSpacing: 0.5, minWidth: 0 }}
+          >
+            CEREMONIA
+          </Button>
+          <Typography aria-hidden="true" sx={{ color: '#1565C0', fontSize: '0.75rem' }}>→</Typography>
+          <Button
+            size="small"
+            disabled={!id || !graduando?.sesionId}
+            onClick={() => navigate(`/admin/eventos/ceremonias/${id}/sesion/${graduando?.sesionId}`)}
+            sx={{ color: '#1565C0', fontSize: '0.75rem', fontWeight: 600, letterSpacing: 0.5, minWidth: 0 }}
+          >
+            SESIÓN
+          </Button>
+          <Typography aria-hidden="true" sx={{ color: '#1565C0', fontSize: '0.75rem' }}>→</Typography>
+          <Button
+            size="small"
+            disabled={!graduando}
+            onClick={() => setEditGradOpen(true)}
+            sx={{ color: '#1565C0', fontSize: '0.75rem', fontWeight: 600, letterSpacing: 0.5, minWidth: 0 }}
+          >
+            PROGRAMA
+          </Button>
+          <Typography aria-hidden="true" sx={{ color: '#1565C0', fontSize: '0.75rem' }}>→</Typography>
+          <Typography aria-current="page" sx={{ color: '#1565C0', fontSize: '0.75rem', fontWeight: 600, letterSpacing: 0.5, px: 1 }}>
+            GRADUANDO
+          </Typography>
+        </Box>
       </Box>
 
       {/* Info graduando */}
