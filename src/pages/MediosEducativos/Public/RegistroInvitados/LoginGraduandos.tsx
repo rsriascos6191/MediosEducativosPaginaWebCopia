@@ -231,11 +231,13 @@ export default function LoginGraduandos() {
               placeholder="Ingresar número de cédula"
               value={cedula}
               onChange={(e) => setCedula(onlyDigits(e.target.value))}
-              inputProps={{
-                inputMode: 'numeric',
-                pattern: '[0-9]*',
-                maxLength: 15,
-                autoComplete: 'off',
+              slotProps={{
+                htmlInput: {
+                  inputMode: 'numeric',
+                  pattern: '[0-9]*',
+                  maxLength: 15,
+                  autoComplete: 'off',
+                },
               }}
               sx={{
                 mb: 2,
@@ -259,11 +261,13 @@ export default function LoginGraduandos() {
               placeholder="Ingresar código estudiantil"
               value={codigo}
               onChange={(e) => setCodigo(onlyDigits(e.target.value))}
-              inputProps={{
-                inputMode: 'numeric',
-                pattern: '[0-9]*',
-                maxLength: 20,
-                autoComplete: 'off',
+              slotProps={{
+                htmlInput: {
+                  inputMode: 'numeric',
+                  pattern: '[0-9]*',
+                  maxLength: 20,
+                  autoComplete: 'off',
+                },
               }}
               sx={{
                 mb: 3,

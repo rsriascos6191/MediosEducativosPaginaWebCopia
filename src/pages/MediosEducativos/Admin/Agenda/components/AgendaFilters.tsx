@@ -9,7 +9,7 @@ import {
   MenuItem,
   Typography,
 } from '@mui/material';
-import type { AgendaFilters, EstadoReserva } from '../interfaces/agenda.interface';
+import type { AgendaFilters } from '../interfaces/agenda.interface';
 import {
   ESTADO_OPTIONS,
   TIPO_ESPACIO_OPTIONS,
@@ -70,7 +70,7 @@ export default function AgendaFilters({
           label="Fecha"
           value={filters.fecha || ''}
           onChange={handleChange('fecha')}
-          InputLabelProps={{ shrink: true }}
+          slotProps={{ inputLabel: { shrink: true } }}
           sx={{
             minWidth: 150,
             '& .MuiOutlinedInput-root': { borderRadius: '8px' },

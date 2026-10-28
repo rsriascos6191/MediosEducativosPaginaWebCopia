@@ -10,7 +10,7 @@ import {
   InputAdornment,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import type { SolicitudFilters, EstadoSolicitud } from '../interfaces/solicitudes.interface';
+import type { SolicitudFilters } from '../interfaces/solicitudes.interface';
 import {
   CAMPUS_OPTIONS,
   ESTADO_OPTIONS,
@@ -63,12 +63,14 @@ export default function SolicitudesFilters({
             backgroundColor: '#FAFBFC',
           },
         }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon sx={{ color: '#9AA5B5', fontSize: 20 }} />
-            </InputAdornment>
-          ),
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon sx={{ color: '#9AA5B5', fontSize: 20 }} />
+              </InputAdornment>
+            ),
+          },
         }}
       />
 
@@ -116,7 +118,7 @@ export default function SolicitudesFilters({
         label="Fecha"
         value={filters.fecha || ''}
         onChange={handleChange('fecha')}
-        InputLabelProps={{ shrink: true }}
+        slotProps={{ inputLabel: { shrink: true } }}
         sx={{
           minWidth: 150,
           '& .MuiOutlinedInput-root': { borderRadius: '8px' },

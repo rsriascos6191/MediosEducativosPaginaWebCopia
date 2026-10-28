@@ -48,7 +48,7 @@ export default function Documentos() {
         }}>
           <TextField fullWidth size="small" placeholder="Buscar por nombre o palabra clave..."
             value={search} onChange={(e) => setSearch(e.target.value)}
-            InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon sx={{ color: '#9AA5B5' }} /></InputAdornment> }}
+            slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon sx={{ color: '#9AA5B5' }} /></InputAdornment> } }}
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
           />
           <Button variant="contained" sx={{

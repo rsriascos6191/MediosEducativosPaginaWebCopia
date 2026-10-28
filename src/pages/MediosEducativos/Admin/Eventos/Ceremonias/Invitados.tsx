@@ -121,7 +121,7 @@ export default function Invitados() {
                 <TableCell sx={{ fontWeight: 600, fontSize: '0.875rem' }}>{inv.nombre}</TableCell>
                 <TableCell sx={{ fontSize: '0.875rem' }}>{inv.documento}</TableCell>
                 <TableCell sx={{ fontSize: '0.875rem' }}>{inv.graduandoNombre}</TableCell>
-                <TableCell sx={{ fontSize: '0.875rem' }}>{inv.tipo}</TableCell>
+                <TableCell sx={{ fontSize: '0.875rem' }}>Invitado</TableCell>
                 <TableCell sx={{ fontSize: '0.875rem', color: inv.autorizacion === 'Autorizado' ? '#1B7A3D' : '#B76E00' }}>
                   {inv.autorizacion}
                 </TableCell>
@@ -139,7 +139,7 @@ export default function Invitados() {
       </TableContainer>
 
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth
-        PaperProps={{ sx: { borderRadius: '12px' } }}>
+        slotProps={{ paper: { sx: { borderRadius: '12px' } } }}>
         <DialogTitle sx={{ fontWeight: 700 }}>
           Editar invitado
           <IconButton onClick={() => setEditOpen(false)} sx={{ position: 'absolute', right: 12, top: 12 }}>

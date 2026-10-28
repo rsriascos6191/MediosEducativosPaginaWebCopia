@@ -180,12 +180,14 @@ export default function Agenda() {
               backgroundColor: '#FFFFFF',
             },
           }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon sx={{ color: '#9AA5B5', fontSize: 20 }} />
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: '#9AA5B5', fontSize: 20 }} />
+                </InputAdornment>
+              ),
+            },
           }}
         />
         <Typography

@@ -320,6 +320,12 @@ export default function DetalleCeremonia() {
     );
   }
 
+  const graduandosAsignados = sesiones.reduce(
+    (total, sesion) => total + (sesion.graduandosCount ?? 0),
+    0
+  );
+  const graduandosSinSesion = ceremonia.graduandos - graduandosAsignados;
+
   return (
     <>
       <Box sx={{ mb: 2.5 }}>
@@ -431,6 +437,11 @@ export default function DetalleCeremonia() {
             {[
               { label: 'Sesiones', value: sesiones.length ? String(sesiones.length) : 'Por configurar' },
               { label: 'Graduandos', value: String(ceremonia.graduandos ?? '—') },
+              { label: 'Asignados a sesiones', value: String(graduandosAsignados) },
+              {
+                label: 'Sin sesión asignada',
+                value: graduandosSinSesion >= 0 ? String(graduandosSinSesion) : 'Revisar conteo',
+              },
               { label: 'Invitados', value: String(ceremonia.invitados ?? '—') },
             ].map((r) => (
               <Box key={r.label} sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.25 }}>
@@ -438,6 +449,24 @@ export default function DetalleCeremonia() {
                 <Typography sx={{ fontWeight: 600, color: '#1A2A3A', fontSize: '0.875rem' }}>{r.value}</Typography>
               </Box>
             ))}
+            {graduandosSinSesion > 0 ? (
+              <Box sx={{ mt: 2, p: 1.5, borderRadius: '8px', backgroundColor: '#FFF4E5' }}>
+                <Typography sx={{ color: '#8A5700', fontSize: '0.85rem' }}>
+                  {graduandosSinSesion} {graduandosSinSesion === 1 ? 'graduando no tiene' : 'graduandos no tienen'} sesión asignada. Para ubicarlos, abre el listado y selecciona el filtro «Sin asignar».
+                </Typography>
+                <Button
+                  size="small"
+                  onClick={() => navigate(`/admin/eventos/ceremonias/${id}/graduandos`)}
+                  sx={{ mt: 0.5, px: 0, textTransform: 'none', fontWeight: 600 }}
+                >
+                  Abrir listado de graduandos
+                </Button>
+              </Box>
+            ) : graduandosSinSesion < 0 ? (
+              <Typography sx={{ color: '#B42318', fontSize: '0.85rem', mt: 2 }}>
+                La suma de graduandos asignados a las sesiones supera el total de la ceremonia. Revisa los registros.
+              </Typography>
+            ) : null}
             <Typography sx={{ color: '#5A6A7A', fontSize: '0.8rem', mt: 2 }}>
               El detalle operativo se configura dentro de cada sesión.
             </Typography>

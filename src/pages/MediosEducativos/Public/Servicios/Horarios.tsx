@@ -2,7 +2,7 @@
  * Portal público – Servicio Horarios
  */
 
-import { Box, Typography, Button, Container, Card, CardContent } from '@mui/material';
+import { Box, Typography, Button, Container, Card } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 
 export default function Horarios() {

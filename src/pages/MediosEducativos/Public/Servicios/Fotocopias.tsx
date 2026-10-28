@@ -2,7 +2,7 @@
  * Portal público – Servicio Fotocopias
  */
 
-import { Box, Typography, Button, Container, Card, CardContent, Chip } from '@mui/material';
+import { Box, Typography, Button, Container, Card, Chip } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 
 export default function Fotocopias() {

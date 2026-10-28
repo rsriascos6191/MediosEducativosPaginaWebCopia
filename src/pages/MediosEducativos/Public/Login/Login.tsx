@@ -109,14 +109,16 @@ export default function Login() {
               fullWidth size="small" type={showPass ? 'text' : 'password'}
               placeholder="Ingresar contraseña"
               value={password} onChange={(e) => setPassword(e.target.value)}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton size="small" onClick={() => setShowPass(!showPass)}>
-                      {showPass ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setShowPass(!showPass)}>
+                        {showPass ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
               }}
               sx={{ mb: 2.5, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
             />

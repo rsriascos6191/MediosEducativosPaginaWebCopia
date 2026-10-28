@@ -324,28 +324,28 @@ export default function FormularioInvitados() {
                     ? `${graduando.nombres} ${graduando.apellidos}`.trim()
                     : '—'
                 }
-                InputProps={{ readOnly: true }}
+                slotProps={{ input: { readOnly: true } }}
                 sx={readOnlySx}
               />
               <TextField
                 size="small"
                 label="Código estudiantil"
                 value={graduando?.codigoEstudiantil || codigoLogin || '—'}
-                InputProps={{ readOnly: true }}
+                slotProps={{ input: { readOnly: true } }}
                 sx={readOnlySx}
               />
               <TextField
                 size="small"
                 label="Cédula"
                 value={graduando?.documento || cedulaLogin || '—'}
-                InputProps={{ readOnly: true }}
+                slotProps={{ input: { readOnly: true } }}
                 sx={readOnlySx}
               />
               <TextField
                 size="small"
                 label="Programa académico"
                 value={graduando?.programa || '—'}
-                InputProps={{ readOnly: true }}
+                slotProps={{ input: { readOnly: true } }}
                 sx={readOnlySx}
               />
             </Box>
@@ -407,7 +407,7 @@ export default function FormularioInvitados() {
                     cedula: onlyDigits(e.target.value),
                   }))
                 }
-                inputProps={{ inputMode: 'numeric', maxLength: 15 }}
+                slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 15 } }}
                 sx={fieldSx}
               />
               <TextField
@@ -421,7 +421,7 @@ export default function FormularioInvitados() {
                     telefono: onlyDigits(e.target.value),
                   }))
                 }
-                inputProps={{ inputMode: 'numeric', maxLength: 15 }}
+                slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 15 } }}
                 sx={fieldSx}
               />
               <TextField
@@ -500,7 +500,7 @@ export default function FormularioInvitados() {
                     cedula: onlyDigits(e.target.value),
                   }))
                 }
-                inputProps={{ inputMode: 'numeric', maxLength: 15 }}
+                slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 15 } }}
                 sx={fieldSx}
               />
               <TextField
@@ -514,7 +514,7 @@ export default function FormularioInvitados() {
                     telefono: onlyDigits(e.target.value),
                   }))
                 }
-                inputProps={{ inputMode: 'numeric', maxLength: 15 }}
+                slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 15 } }}
                 sx={fieldSx}
               />
               <TextField
