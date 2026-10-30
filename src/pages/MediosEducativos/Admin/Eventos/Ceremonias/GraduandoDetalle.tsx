@@ -94,6 +94,7 @@ export default function GraduandoDetalle() {
       );
     })
   );
+  const programaId = graduando?.programaIds?.[0];
 
   const handleSaveGraduando = async () => {
     if (!graduandoId || !graduando) return;
@@ -226,8 +227,11 @@ export default function GraduandoDetalle() {
           <Typography aria-hidden="true" sx={{ color: '#1565C0', fontSize: '0.75rem' }}>→</Typography>
           <Button
             size="small"
-            disabled={!graduando}
-            onClick={() => setEditGradOpen(true)}
+            disabled={!id || !programaId}
+            onClick={() => {
+              if (!id || !programaId) return;
+              navigate(`/admin/eventos/ceremonias/${id}/graduandos?programa=${encodeURIComponent(String(programaId))}`);
+            }}
             sx={{ color: '#1565C0', fontSize: '0.75rem', fontWeight: 600, letterSpacing: 0.5, minWidth: 0 }}
           >
             PROGRAMA

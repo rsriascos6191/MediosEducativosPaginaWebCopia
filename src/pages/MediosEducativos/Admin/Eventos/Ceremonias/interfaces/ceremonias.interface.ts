@@ -20,6 +20,7 @@ export interface Ceremonia {
   invitados: number;
   estado: EstadoCeremonia;
   cupoInvitados?: number;
+  maxInvitadosPorGraduando: number;
 }
 
 export interface NuevaCeremonia {
@@ -28,7 +29,7 @@ export interface NuevaCeremonia {
   idEvento?: number;
   idEspacio: number;
   estado: EstadoCeremonia;
-  cupoInvitados: number;
+  maxInvitadosPorGraduando: number;
 }
 
 export interface Sesion {

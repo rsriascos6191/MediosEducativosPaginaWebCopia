@@ -166,6 +166,7 @@ CREATE TABLE ceremonia_grado (
     nombre VARCHAR(255) NOT NULL,
     fecha DATE NOT NULL,
     estado VARCHAR(50) NOT NULL,
+    max_invitados_por_graduando INTEGER NOT NULL DEFAULT 2,
     evidencia_fotografia_1 BYTEA,
     evidencia_fotografia_2 BYTEA,
     evidencia_fotografia_3 BYTEA,
@@ -177,7 +178,10 @@ CREATE TABLE ceremonia_grado (
         FOREIGN KEY (id_evento) REFERENCES evento_institucional(id_evento),
 
     CONSTRAINT fk_ceremonia_espacio
-        FOREIGN KEY (id_espacio) REFERENCES espacio(id_espacio)
+        FOREIGN KEY (id_espacio) REFERENCES espacio(id_espacio),
+
+    CONSTRAINT chk_ceremonia_max_invitados_por_graduando
+        CHECK (max_invitados_por_graduando BETWEEN 2 AND 4)
 );
 
 CREATE TABLE sesion (

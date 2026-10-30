@@ -40,6 +40,8 @@ Las solicitudes del formulario público se guardan en PostgreSQL mediante el bac
 
    ```sh
    psql -h localhost -U <DB_USER> -d <DB_NAME> -f backend/database/migrations/001_initial_schema.sql
+   psql -h localhost -U <DB_USER> -d <DB_NAME> -f backend/database/scripts/agregar_cupo_invitados.sql
+   psql -h localhost -U <DB_USER> -d <DB_NAME> -f backend/database/scripts/agregar_max_invitados_por_graduando.sql
    psql -h localhost -U <DB_USER> -d <DB_NAME> -f backend/database/seeds/datos_prueba.sql
    ```
 

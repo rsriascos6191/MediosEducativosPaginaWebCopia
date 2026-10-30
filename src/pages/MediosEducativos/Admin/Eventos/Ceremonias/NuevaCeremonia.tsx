@@ -21,6 +21,7 @@ export default function NuevaCeremonia() {
   const [espacios, setEspacios] = useState<EspacioOption[]>([]);
   const [idEspacio, setIdEspacio] = useState('');
   const [estado, setEstado] = useState<EstadoCeremonia>('Programada');
+  const [maxInvitadosPorGraduando, setMaxInvitadosPorGraduando] = useState(2);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -49,7 +50,7 @@ export default function NuevaCeremonia() {
         fecha,
         idEspacio: Number(idEspacio),
         estado,
-        cupoInvitados: 2,
+        maxInvitadosPorGraduando,
       });
       navigate(`/admin/eventos/ceremonias/${c.id}`);
     } catch (cause) {
@@ -126,6 +127,28 @@ export default function NuevaCeremonia() {
                 <MenuItem value="Finalizada">Finalizada</MenuItem>
               </TextField>
             </Box>
+          </Box>
+
+          <Typography sx={{ fontWeight: 700, fontSize: '0.8rem', color: '#1565C0', letterSpacing: 0.5, mb: 0.5 }}>
+            INVITADOS
+          </Typography>
+          <Typography sx={{ color: '#5A6A7A', fontSize: '0.875rem', mb: 1.5 }}>
+            Define cuántos invitados puede registrar cada graduando en esta ceremonia.
+          </Typography>
+          <Box sx={{ maxWidth: 380, mb: 3 }}>
+            <TextField
+              select
+              fullWidth
+              label="Máximo por graduando"
+              value={maxInvitadosPorGraduando}
+              onChange={(e) => setMaxInvitadosPorGraduando(Number(e.target.value))}
+              helperText="El valor habitual es 2; puedes permitir hasta 4."
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+            >
+              {[2, 3, 4].map((limite) => (
+                <MenuItem key={limite} value={limite}>{limite} invitados</MenuItem>
+              ))}
+            </TextField>
           </Box>
 
           {error && (

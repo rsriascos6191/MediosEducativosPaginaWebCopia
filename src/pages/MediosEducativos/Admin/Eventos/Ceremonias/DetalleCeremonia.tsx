@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Button, Card, CardContent, Chip, Dialog, DialogTitle,
   DialogContent, DialogActions, TextField, MenuItem, IconButton, CircularProgress,
@@ -15,6 +15,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import type { Ceremonia, Sesion } from './interfaces/ceremonias.interface';
 import {
   cambiarEstadoCeremonia, getCeremoniaById, getFotografiasCeremonia,
+  updateMaxInvitadosPorGraduando,
   getSesiones, addSesion, guardarFotografiasCeremonia, HORA_OPTIONS,
 } from './services/ceremonias.service';
 
@@ -61,6 +62,10 @@ export default function DetalleCeremonia() {
   const [horaFin, setHoraFin] = useState('');
   const [saving, setSaving] = useState(false);
   const [sesionError, setSesionError] = useState('');
+  const [maxInvitadosPorGraduando, setMaxInvitadosPorGraduando] = useState(2);
+  const [savingConfiguracionInvitados, setSavingConfiguracionInvitados] = useState(false);
+  const [configuracionInvitadosError, setConfiguracionInvitadosError] = useState('');
+  const [configuracionInvitadosSuccess, setConfiguracionInvitadosSuccess] = useState('');
   const [savingEstadoCeremonia, setSavingEstadoCeremonia] = useState(false);
   const [estadoCeremoniaError, setEstadoCeremoniaError] = useState('');
 
@@ -90,6 +95,9 @@ export default function DetalleCeremonia() {
       const [c, s] = await Promise.all([getCeremoniaById(id), getSesiones(id)]);
       setCeremonia(c);
       setSesiones(s);
+      if (c) {
+        setMaxInvitadosPorGraduando(c.maxInvitadosPorGraduando ?? 2);
+      }
     } finally {
       setLoading(false);
     }
@@ -103,7 +111,7 @@ export default function DetalleCeremonia() {
       ? 'En curso'
       : ceremonia.estado === 'En curso'
         ? 'Finalizada'
-        : ceremonia.estado === 'Finalizada' && import.meta.env.DEV ? 'Programada' : null;
+        : null;
     if (!siguienteEstado) return;
 
     setSavingEstadoCeremonia(true);
@@ -116,11 +124,6 @@ export default function DetalleCeremonia() {
           ...sesion,
           estado: 'Finalizada',
         })));
-      } else if (resultado.estado === 'Programada' && ceremonia.estado === 'Finalizada') {
-        setSesiones((actuales) => actuales.map((sesion) => ({
-          ...sesion,
-          estado: 'Pendiente',
-        })));
       }
     } catch (cause) {
       setEstadoCeremoniaError(
@@ -128,6 +131,29 @@ export default function DetalleCeremonia() {
       );
     } finally {
       setSavingEstadoCeremonia(false);
+    }
+  };
+
+  const handleGuardarLimiteInvitados = async () => {
+    if (!id || savingConfiguracionInvitados) return;
+    setSavingConfiguracionInvitados(true);
+    setConfiguracionInvitadosError('');
+    setConfiguracionInvitadosSuccess('');
+    try {
+      const resultado = await updateMaxInvitadosPorGraduando(id, maxInvitadosPorGraduando);
+      setCeremonia((actual) => actual
+        ? {
+          ...actual,
+          maxInvitadosPorGraduando: resultado.maxInvitadosPorGraduando,
+        }
+        : actual);
+      setConfiguracionInvitadosSuccess('Límite de invitados por graduando guardado.');
+    } catch (cause) {
+      setConfiguracionInvitadosError(
+        cause instanceof Error ? cause.message : 'No fue posible guardar la configuración de invitados.'
+      );
+    } finally {
+      setSavingConfiguracionInvitados(false);
     }
   };
 
@@ -320,6 +346,10 @@ export default function DetalleCeremonia() {
     );
   }
 
+  if (ceremonia.estado === 'Finalizada') {
+    return <Navigate to="/admin/eventos/ceremonias" replace />;
+  }
+
   const graduandosAsignados = sesiones.reduce(
     (total, sesion) => total + (sesion.graduandosCount ?? 0),
     0
@@ -371,6 +401,56 @@ export default function DetalleCeremonia() {
           </Card>
         ))}
       </Box>
+
+      <Card elevation={0} sx={{ borderRadius: '12px', border: '1px solid #E5EAF0', mb: 3 }}>
+        <CardContent sx={{ p: 2.5 }}>
+          <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: '#0B1A2A', mb: 0.5 }}>
+            Límite de invitados por graduando
+          </Typography>
+          <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem', mb: 2 }}>
+            Define cuántos invitados puede registrar cada graduando en esta ceremonia.
+          </Typography>
+          <Box sx={{ maxWidth: 380, mb: 2 }}>
+            <TextField
+              select
+              fullWidth
+              label="Máximo por graduando"
+              value={maxInvitadosPorGraduando}
+              onChange={(e) => setMaxInvitadosPorGraduando(Number(e.target.value))}
+              helperText="El valor habitual es 2; puedes permitir hasta 4."
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+            >
+              {[2, 3, 4].map((limite) => (
+                <MenuItem key={limite} value={limite}>{limite} invitados</MenuItem>
+              ))}
+            </TextField>
+          </Box>
+          {configuracionInvitadosError && (
+            <Typography role="alert" sx={{ color: '#B42318', fontSize: '0.85rem', mb: 1.5 }}>
+              {configuracionInvitadosError}
+            </Typography>
+          )}
+          {configuracionInvitadosSuccess && (
+            <Typography role="status" sx={{ color: '#1B7A3D', fontSize: '0.85rem', mb: 1.5 }}>
+              {configuracionInvitadosSuccess}
+            </Typography>
+          )}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              variant="contained"
+              disabled={savingConfiguracionInvitados}
+              onClick={() => void handleGuardarLimiteInvitados()}
+              sx={{
+                backgroundColor: '#0B3A5C', textTransform: 'none', fontWeight: 600,
+                borderRadius: '8px', boxShadow: 'none',
+                '&:hover': { backgroundColor: '#062A42', boxShadow: 'none' },
+              }}
+            >
+              {savingConfiguracionInvitados ? 'Guardando…' : 'Guardar configuración'}
+            </Button>
+          </Box>
+        </CardContent>
+      </Card>
 
       {/* Sesiones */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
@@ -723,8 +803,6 @@ export default function DetalleCeremonia() {
               ? 'Iniciar ceremonia'
               : ceremonia.estado === 'En curso'
                 ? 'Finalizar ceremonia'
-                : ceremonia.estado === 'Finalizada' && import.meta.env.DEV
-                  ? 'Restablecer para pruebas'
                 : `Ceremonia ${ceremonia.estado.toLowerCase()}`}
           </Typography>
           <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem' }}>
@@ -732,8 +810,6 @@ export default function DetalleCeremonia() {
               ? 'Inicia la ceremonia.'
               : ceremonia.estado === 'En curso'
                 ? 'Finaliza la ceremonia y guarda su información en el historial.'
-                : ceremonia.estado === 'Finalizada' && import.meta.env.DEV
-                  ? 'Restablece la ceremonia a Programada y las sesiones a Pendiente. No se registra en el historial.'
                 : 'El estado de la ceremonia es definitivo.'}
           </Typography>
           {estadoCeremoniaError && (
@@ -744,10 +820,7 @@ export default function DetalleCeremonia() {
         </Box>
         <Button
           variant="contained"
-          disabled={savingEstadoCeremonia || (
-            !['Programada', 'En curso'].includes(ceremonia.estado) &&
-            !(import.meta.env.DEV && ceremonia.estado === 'Finalizada')
-          )}
+          disabled={savingEstadoCeremonia || !['Programada', 'En curso'].includes(ceremonia.estado)}
           onClick={() => void handleAvanzarEstadoCeremonia()}
           sx={{
             backgroundColor: '#E30613', textTransform: 'none', fontWeight: 600, borderRadius: '8px', boxShadow: 'none',
@@ -760,8 +833,6 @@ export default function DetalleCeremonia() {
               ? 'Iniciar ceremonia'
               : ceremonia.estado === 'En curso'
                 ? 'Finalizar ceremonia'
-                : ceremonia.estado === 'Finalizada' && import.meta.env.DEV
-                  ? 'Restablecer para pruebas'
                 : `Ceremonia ${ceremonia.estado.toLowerCase()}`}
         </Button>
       </Box>

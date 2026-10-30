@@ -125,10 +125,13 @@ export default function CeremoniasListado() {
                   }} />
                 </TableCell>
                 <TableCell>
-                  <Button variant="text" onClick={() => navigate(`/admin/eventos/ceremonias/${c.id}`)}
+                  <Button
+                    variant="text"
+                    disabled={c.estado === 'Finalizada'}
+                    onClick={() => navigate(`/admin/eventos/ceremonias/${c.id}`)}
                     sx={{ color: '#1565C0', textTransform: 'none', fontWeight: 500, fontSize: '0.875rem', p: 0, minWidth: 'auto',
                       '&:hover': { backgroundColor: 'transparent', textDecoration: 'underline' } }}>
-                    Ver detalle
+                    {c.estado === 'Finalizada' ? 'No disponible' : 'Ver detalle'}
                   </Button>
                 </TableCell>
               </TableRow>
@@ -136,9 +139,6 @@ export default function CeremoniasListado() {
           </TableBody>
         </Table>
       </TableContainer>
-      <Typography sx={{ color: '#5A6A7A', fontSize: '0.85rem', mt: 2 }}>
-        Datos de ejemplo para representar una ceremonia general con varias sesiones.
-      </Typography>
     </>
   );
 }

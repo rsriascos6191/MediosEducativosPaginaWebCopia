@@ -113,7 +113,7 @@ export interface GraduandoRegistroPublico {
   documento: string;
   codigoEstudiantil: string;
   programa: string;
-  cupoInvitados: number;
+  maxInvitadosPorGraduando: number;
   invitadosRegistrados: number;
 }
 
@@ -173,6 +173,21 @@ export async function updateCupoInvitados(
     invitadosRegistrados: number;
     invitadosExcedidos: number;
   }>(respuesta);
+}
+
+export async function updateMaxInvitadosPorGraduando(
+  ceremoniaId: string,
+  maxInvitadosPorGraduando: number,
+): Promise<{ id: string; maxInvitadosPorGraduando: number }> {
+  const respuesta = await fetchBackend(
+    `/api/ceremonias/${encodeURIComponent(ceremoniaId)}/max-invitados-por-graduando`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maxInvitadosPorGraduando }),
+    },
+  );
+  return respuestaCeremonia<{ id: string; maxInvitadosPorGraduando: number }>(respuesta);
 }
 
 export async function cambiarEstadoCeremonia(

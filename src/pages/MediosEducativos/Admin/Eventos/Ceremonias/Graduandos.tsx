@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Alert, Box, Typography, Button, TextField, MenuItem, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Card, CardContent,
@@ -16,6 +16,8 @@ import ImportarGraduandosDialog from './ImportarGraduandosDialog';
 export default function Graduandos() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const programaFiltroInicial = searchParams.get('programa') || '';
   const [items, setItems] = useState<Graduando[]>([]);
   const [stats, setStats] = useState({ total: 0, revisados: 0, errores: 0 });
   const [ceremonia, setCeremonia] = useState<Ceremonia | null>(null);
@@ -23,8 +25,14 @@ export default function Graduandos() {
   const [programas, setProgramas] = useState<ProgramaOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filters, setFilters] = useState<GraduandoFilters>({});
+  const [filters, setFilters] = useState<GraduandoFilters>(() =>
+    programaFiltroInicial ? { programa: programaFiltroInicial } : {}
+  );
   const [importOpen, setImportOpen] = useState(false);
+  const programaFiltroVisible = filters.programa
+    && programas.some((programa) => String(programa.id_programa) === filters.programa)
+    ? filters.programa
+    : 'Todos los programas';
 
   const load = useCallback(async (f?: GraduandoFilters) => {
     if (!id) return;
@@ -45,7 +53,9 @@ export default function Graduandos() {
     }
   }, [id]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load(programaFiltroInicial ? { programa: programaFiltroInicial } : {});
+  }, [load, programaFiltroInicial]);
 
   useEffect(() => {
     if (!id) return;
@@ -129,7 +139,7 @@ export default function Graduandos() {
           <MenuItem value="sin-asignar">Sin asignar</MenuItem>
           {sesiones.map((sesion) => <MenuItem key={sesion.id} value={sesion.id}>{sesion.nombre}</MenuItem>)}
         </TextField>
-        <TextField select size="small" label="Programa académico" value={filters.programa || 'Todos los programas'}
+        <TextField select size="small" label="Programa académico" value={programaFiltroVisible}
           onChange={(e) => setFilters({ ...filters, programa: e.target.value })}
           sx={{ minWidth: 170, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
           <MenuItem value="Todos los programas">Todos los programas</MenuItem>

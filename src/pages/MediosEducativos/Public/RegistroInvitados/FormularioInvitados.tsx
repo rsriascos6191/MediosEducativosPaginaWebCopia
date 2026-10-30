@@ -1,8 +1,7 @@
 /**
  * Formulario de registro de invitados de graduandos.
  * - Datos del graduando (solo lectura, según cédula del login)
- * - Primer y segundo invitado (nombre, cédula, teléfono, parentesco)
- * Los invitados se registran en el mock de ceremonias (panel admin).
+ * - Invitados dentro del límite definido para la ceremonia
  */
 
 import { useState, useEffect } from 'react';
@@ -60,6 +59,9 @@ const emptyInvitado = (): InvitadoForm => ({
   parentesco: '',
 });
 
+const calcularInvitadosDisponibles = (graduando: GraduandoRegistroPublico) =>
+  Math.max(0, graduando.maxInvitadosPorGraduando - graduando.invitadosRegistrados);
+
 export default function FormularioInvitados() {
   const navigate = useNavigate();
   const cedulaLogin = localStorage.getItem('me_graduando_cedula') || '';
@@ -68,8 +70,7 @@ export default function FormularioInvitados() {
 
   const [graduando, setGraduando] = useState<GraduandoRegistroPublico | null>(null);
   const [loading, setLoading] = useState(true);
-  const [invitado1, setInvitado1] = useState<InvitadoForm>(emptyInvitado());
-  const [invitado2, setInvitado2] = useState<InvitadoForm>(emptyInvitado());
+  const [invitados, setInvitados] = useState<InvitadoForm[]>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
@@ -82,6 +83,10 @@ export default function FormularioInvitados() {
     iniciarSesionGraduando(cedulaLogin, codigoLogin)
       .then((g) => {
         setGraduando(g);
+        setInvitados(Array.from(
+          { length: calcularInvitadosDisponibles(g) },
+          emptyInvitado,
+        ));
       })
       .catch((cause: unknown) => {
         setGraduando(null);
@@ -100,6 +105,12 @@ export default function FormularioInvitados() {
     return null;
   };
 
+  const actualizarInvitado = (index: number, campo: keyof InvitadoForm, valor: string) => {
+    setInvitados((actuales) => actuales.map((invitado, posicion) =>
+      posicion === index ? { ...invitado, [campo]: valor } : invitado
+    ));
+  };
+
   const handleSubmit = async () => {
     setError('');
     setSuccess('');
@@ -108,15 +119,22 @@ export default function FormularioInvitados() {
       return;
     }
 
-    const invitadosPendientes = [
-      { datos: invitado1, etiqueta: 'Primer invitado' },
-      { datos: invitado2, etiqueta: 'Segundo invitado' },
-    ].filter(({ datos }) =>
+    const invitadosPendientes = invitados.map((datos, index) => ({
+      datos,
+      etiqueta: `Invitado ${graduando.invitadosRegistrados + index + 1}`,
+    })).filter(({ datos }) =>
       datos.nombre.trim() || datos.cedula.trim() ||
       datos.telefono.trim() || datos.parentesco
     );
     if (invitadosPendientes.length === 0) {
-      setError(validateInvitado(invitado1, 'Primer invitado') || 'Ingresa los datos del invitado.');
+      setError(
+        invitados.length === 0
+          ? 'Ya alcanzaste el máximo de invitados permitido para esta ceremonia.'
+          : validateInvitado(
+            invitados[0],
+            `Invitado ${graduando.invitadosRegistrados + 1}`,
+          ) || 'Ingresa los datos del invitado.'
+      );
       return;
     }
     for (const invitado of invitadosPendientes) {
@@ -139,14 +157,18 @@ export default function FormularioInvitados() {
           autorizacion: 'Pendiente',
         })),
       );
-      setGraduando((actual) => actual
-        ? { ...actual, invitadosRegistrados: actual.invitadosRegistrados + guardados.length }
-        : actual);
+      const graduandoActualizado = {
+        ...graduando,
+        invitadosRegistrados: graduando.invitadosRegistrados + guardados.length,
+      };
+      setGraduando(graduandoActualizado);
+      setInvitados(Array.from(
+        { length: calcularInvitadosDisponibles(graduandoActualizado) },
+        emptyInvitado,
+      ));
       setSuccess(
         'Invitados registrados correctamente. Podrás verlos en el módulo de ceremonias del panel administrativo.'
       );
-      setInvitado1(emptyInvitado());
-      setInvitado2(emptyInvitado());
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Ocurrió un error al guardar. Intenta de nuevo.');
     } finally {
@@ -280,6 +302,12 @@ export default function FormularioInvitados() {
             {success}
           </Alert>
         )}
+        {graduando && (
+          <Alert severity={invitados.length === 0 ? 'warning' : 'info'} sx={{ mb: 2, borderRadius: '8px' }}>
+            Cupos disponibles para ti: {invitados.length}. Invitados tuyos:
+            {' '}{graduando.invitadosRegistrados}/{graduando.maxInvitadosPorGraduando}.
+          </Alert>
+        )}
 
         {/* Datos del graduando (solo lectura) */}
         <Accordion
@@ -352,191 +380,84 @@ export default function FormularioInvitados() {
           </AccordionDetails>
         </Accordion>
 
-        {/* Primer invitado */}
-        <Accordion
-          defaultExpanded
-          elevation={0}
-          sx={{
-            border: '1px solid #E5EAF0',
-            borderRadius: '12px !important',
-            mb: 2,
-            backgroundColor: '#FFFFFF',
-            '&:before': { display: 'none' },
-          }}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Box>
-              <Typography sx={{ fontWeight: 700, color: '#0B1A2A' }}>
-                Añada primer invitado
-              </Typography>
-              <Typography sx={{ color: '#5A6A7A', fontSize: '0.8rem' }}>
-                Datos de la persona que te acompañará en la ceremonia.
-              </Typography>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  sm: '1fr 1fr',
-                  md: '1fr 1fr 1fr 1fr',
-                },
-                gap: 2,
-              }}
-            >
-              <TextField
-                size="small"
-                label="Nombre completo del invitado *"
-                placeholder="Nombre completo"
-                value={invitado1.nombre}
-                onChange={(e) =>
-                  setInvitado1((p) => ({ ...p, nombre: e.target.value }))
-                }
-                sx={fieldSx}
-              />
-              <TextField
-                size="small"
-                label="Cédula *"
-                placeholder="Solo números"
-                value={invitado1.cedula}
-                onChange={(e) =>
-                  setInvitado1((p) => ({
-                    ...p,
-                    cedula: onlyDigits(e.target.value),
-                  }))
-                }
-                slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 15 } }}
-                sx={fieldSx}
-              />
-              <TextField
-                size="small"
-                label="Teléfono *"
-                placeholder="Solo números"
-                value={invitado1.telefono}
-                onChange={(e) =>
-                  setInvitado1((p) => ({
-                    ...p,
-                    telefono: onlyDigits(e.target.value),
-                  }))
-                }
-                slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 15 } }}
-                sx={fieldSx}
-              />
-              <TextField
-                select
-                size="small"
-                label="Parentesco *"
-                value={invitado1.parentesco}
-                onChange={(e) =>
-                  setInvitado1((p) => ({ ...p, parentesco: e.target.value }))
-                }
-                sx={fieldSx}
+        {invitados.map((invitado, index) => (
+          <Accordion
+            key={index}
+            defaultExpanded
+            elevation={0}
+            sx={{
+              border: '1px solid #E5EAF0',
+              borderRadius: '12px !important',
+              mb: 2,
+              backgroundColor: '#FFFFFF',
+              '&:before': { display: 'none' },
+            }}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box>
+                <Typography sx={{ fontWeight: 700, color: '#0B1A2A' }}>
+                  Añada invitado {(graduando?.invitadosRegistrados ?? 0) + index + 1}
+                </Typography>
+                <Typography sx={{ color: '#5A6A7A', fontSize: '0.8rem' }}>
+                  Datos del acompañante en la ceremonia.
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    sm: '1fr 1fr',
+                    md: '1fr 1fr 1fr 1fr',
+                  },
+                  gap: 2,
+                }}
               >
-                <MenuItem value="">Seleccionar</MenuItem>
-                {PARENTESCO_OPTIONS.map((o) => (
-                  <MenuItem key={o} value={o}>
-                    {o}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-          </AccordionDetails>
-        </Accordion>
-
-        {/* Segundo invitado */}
-        <Accordion
-          defaultExpanded
-          elevation={0}
-          sx={{
-            border: '1px solid #E5EAF0',
-            borderRadius: '12px !important',
-            mb: 2,
-            backgroundColor: '#FFFFFF',
-            '&:before': { display: 'none' },
-          }}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Box>
-              <Typography sx={{ fontWeight: 700, color: '#0B1A2A' }}>
-                Añada segundo invitado
-              </Typography>
-              <Typography sx={{ color: '#5A6A7A', fontSize: '0.8rem' }}>
-                Datos del segundo acompañante en la ceremonia.
-              </Typography>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  sm: '1fr 1fr',
-                  md: '1fr 1fr 1fr 1fr',
-                },
-                gap: 2,
-              }}
-            >
-              <TextField
-                size="small"
-                label="Nombre completo del invitado *"
-                placeholder="Nombre completo"
-                value={invitado2.nombre}
-                onChange={(e) =>
-                  setInvitado2((p) => ({ ...p, nombre: e.target.value }))
-                }
-                sx={fieldSx}
-              />
-              <TextField
-                size="small"
-                label="Cédula *"
-                placeholder="Solo números"
-                value={invitado2.cedula}
-                onChange={(e) =>
-                  setInvitado2((p) => ({
-                    ...p,
-                    cedula: onlyDigits(e.target.value),
-                  }))
-                }
-                slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 15 } }}
-                sx={fieldSx}
-              />
-              <TextField
-                size="small"
-                label="Teléfono *"
-                placeholder="Solo números"
-                value={invitado2.telefono}
-                onChange={(e) =>
-                  setInvitado2((p) => ({
-                    ...p,
-                    telefono: onlyDigits(e.target.value),
-                  }))
-                }
-                slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 15 } }}
-                sx={fieldSx}
-              />
-              <TextField
-                select
-                size="small"
-                label="Parentesco *"
-                value={invitado2.parentesco}
-                onChange={(e) =>
-                  setInvitado2((p) => ({ ...p, parentesco: e.target.value }))
-                }
-                sx={fieldSx}
-              >
-                <MenuItem value="">Seleccionar</MenuItem>
-                {PARENTESCO_OPTIONS.map((o) => (
-                  <MenuItem key={o} value={o}>
-                    {o}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-          </AccordionDetails>
-        </Accordion>
+                <TextField
+                  size="small"
+                  label="Nombre completo del invitado *"
+                  placeholder="Nombre completo"
+                  value={invitado.nombre}
+                  onChange={(e) => actualizarInvitado(index, 'nombre', e.target.value)}
+                  sx={fieldSx}
+                />
+                <TextField
+                  size="small"
+                  label="Cédula *"
+                  placeholder="Solo números"
+                  value={invitado.cedula}
+                  onChange={(e) => actualizarInvitado(index, 'cedula', onlyDigits(e.target.value))}
+                  slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 15 } }}
+                  sx={fieldSx}
+                />
+                <TextField
+                  size="small"
+                  label="Teléfono *"
+                  placeholder="Solo números"
+                  value={invitado.telefono}
+                  onChange={(e) => actualizarInvitado(index, 'telefono', onlyDigits(e.target.value))}
+                  slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 15 } }}
+                  sx={fieldSx}
+                />
+                <TextField
+                  select
+                  size="small"
+                  label="Parentesco *"
+                  value={invitado.parentesco}
+                  onChange={(e) => actualizarInvitado(index, 'parentesco', e.target.value)}
+                  sx={fieldSx}
+                >
+                  <MenuItem value="">Seleccionar</MenuItem>
+                  {PARENTESCO_OPTIONS.map((opcion) => (
+                    <MenuItem key={opcion} value={opcion}>{opcion}</MenuItem>
+                  ))}
+                </TextField>
+              </Box>
+            </AccordionDetails>
+          </Accordion>
+        ))}
 
         <Box
           sx={{
@@ -568,7 +489,7 @@ export default function FormularioInvitados() {
           <Button
             variant="contained"
             onClick={handleSubmit}
-            disabled={saving}
+            disabled={saving || invitados.length === 0}
             sx={{
               backgroundColor: '#1565C0',
               textTransform: 'none',
@@ -582,7 +503,7 @@ export default function FormularioInvitados() {
               },
             }}
           >
-            {saving ? 'Guardando…' : 'Registrar invitados'}
+            {saving ? 'Guardando…' : invitados.length === 0 ? 'Límite alcanzado' : 'Registrar invitados'}
           </Button>
         </Box>
       </Container>

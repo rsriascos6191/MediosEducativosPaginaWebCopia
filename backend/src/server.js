@@ -82,11 +82,11 @@ app.get("/api/eventos", async (req, res) => {
 const estadosCeremonia = ["Programada", "En curso", "Finalizada", "Cancelada"];
 const estadosCeremoniaCreacion = ["Programada", "En curso", "Finalizada"];
 const estadosCeremoniaActivasRegistroInvitados = ["Programada"];
+const limitesInvitadosPorGraduando = [2, 3, 4];
 const estadosSesion = ["Pendiente", "En curso", "Finalizada"];
 const transicionesCeremonia = {
   Programada: ["En curso", "Cancelada"],
   "En curso": ["Finalizada", "Cancelada"],
-  Finalizada: ["Programada"],
 };
 const ordenEstadosSesion = ["Pendiente", "En curso", "Finalizada"];
 const columnasEvidenciaFotografica = [
@@ -148,6 +148,7 @@ app.get("/api/ceremonias", async (req, res) => {
               c.nombre AS campus,
               cg.estado,
               cg.cupo_invitados AS "cupoInvitados",
+              cg.max_invitados_por_graduando AS "maxInvitadosPorGraduando",
               (SELECT COUNT(*)::int FROM sesion s
                WHERE s.id_ceremonia = cg.id_ceremonia) AS sesiones,
               (SELECT COUNT(*)::int FROM graduando g
@@ -188,6 +189,7 @@ app.get("/api/ceremonias/:id", async (req, res) => {
               c.nombre AS campus,
               cg.estado,
               cg.cupo_invitados AS "cupoInvitados",
+              cg.max_invitados_por_graduando AS "maxInvitadosPorGraduando",
               (SELECT COUNT(*)::int FROM sesion s
                WHERE s.id_ceremonia = cg.id_ceremonia) AS sesiones,
               (SELECT COUNT(*)::int FROM graduando g
@@ -253,14 +255,6 @@ app.patch("/api/ceremonias/:id/estado", async (req, res) => {
     }
 
     const estadoAnterior = ceremonia.rows[0].estado;
-    const restablecimientoPruebas =
-      estadoAnterior === "Finalizada" && estado === "Programada";
-    if (restablecimientoPruebas && process.env.NODE_ENV === "production") {
-      await client.query("ROLLBACK");
-      return res.status(403).json({
-        mensaje: "El restablecimiento de ceremonias solo está disponible durante las pruebas.",
-      });
-    }
     if (!transicionesCeremonia[estadoAnterior]?.includes(estado)) {
       await client.query("ROLLBACK");
       return res.status(409).json({
@@ -279,14 +273,6 @@ app.patch("/api/ceremonias/:id/estado", async (req, res) => {
         [idCeremonia]
       );
       sesionesFinalizadas = sesiones.rowCount;
-    } else if (restablecimientoPruebas) {
-      await client.query(
-        `UPDATE sesion
-         SET estado = 'Pendiente'
-         WHERE id_ceremonia = $1
-           AND estado IN ('En curso', 'Finalizada')`,
-        [idCeremonia]
-      );
     }
 
     const actualizada = await client.query(
@@ -296,24 +282,22 @@ app.patch("/api/ceremonias/:id/estado", async (req, res) => {
        RETURNING id_ceremonia::text AS id, estado`,
       [estado, idCeremonia]
     );
-    if (!restablecimientoPruebas) {
-      const accion = estado === "En curso"
-        ? "Iniciar"
-        : estado === "Finalizada" ? "Finalizar" : "Cancelar";
-      await client.query(
-        `INSERT INTO historial_estado_ceremonia
-           (id_ceremonia, id_admin_responsable, accion, estado_anterior, estado_nuevo, motivo)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          idCeremonia,
-          ceremonia.rows[0].id_admin_responsable,
-          accion,
-          estadoAnterior,
-          estado,
-          estado === "Cancelada" ? motivo : null,
-        ]
-      );
-    }
+    const accion = estado === "En curso"
+      ? "Iniciar"
+      : estado === "Finalizada" ? "Finalizar" : "Cancelar";
+    await client.query(
+      `INSERT INTO historial_estado_ceremonia
+         (id_ceremonia, id_admin_responsable, accion, estado_anterior, estado_nuevo, motivo)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        idCeremonia,
+        ceremonia.rows[0].id_admin_responsable,
+        accion,
+        estadoAnterior,
+        estado,
+        estado === "Cancelada" ? motivo : null,
+      ]
+    );
     await client.query("COMMIT");
     return res.json({
       ...actualizada.rows[0],
@@ -386,6 +370,72 @@ app.patch("/api/ceremonias/:id/cupo-invitados", async (req, res) => {
     }
     console.error("Error al actualizar el cupo de invitados:", error);
     return res.status(500).json({ mensaje: "No fue posible actualizar el cupo de invitados." });
+  } finally {
+    client?.release();
+  }
+});
+
+app.patch("/api/ceremonias/:id/max-invitados-por-graduando", async (req, res) => {
+  const idCeremonia = Number(req.params.id);
+  const cuerpo = req.body && typeof req.body === "object" && !Array.isArray(req.body)
+    ? req.body
+    : null;
+  const maxInvitadosPorGraduando = cuerpo?.maxInvitadosPorGraduando;
+  if (
+    !Number.isSafeInteger(idCeremonia) || idCeremonia <= 0 ||
+    !limitesInvitadosPorGraduando.includes(maxInvitadosPorGraduando)
+  ) {
+    return res.status(400).json({ mensaje: "El máximo de invitados por graduando no es válido." });
+  }
+
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query("BEGIN");
+    const ceremonia = await client.query(
+      "SELECT id_ceremonia FROM ceremonia_grado WHERE id_ceremonia = $1 FOR UPDATE",
+      [idCeremonia]
+    );
+    if (ceremonia.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ mensaje: "No se encontró la ceremonia." });
+    }
+    await client.query("SELECT pg_advisory_xact_lock($1, $2)", [51, idCeremonia]);
+    const graduandosSobreLimite = await client.query(
+      `SELECT g.id_graduando
+       FROM graduando g
+       LEFT JOIN invitado i ON i.id_graduando = g.id_graduando
+       WHERE g.id_ceremonia = $1
+       GROUP BY g.id_graduando
+       HAVING COUNT(i.id_invitado) > $2
+       LIMIT 1`,
+      [idCeremonia, maxInvitadosPorGraduando]
+    );
+    if (graduandosSobreLimite.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        mensaje: "No se puede reducir el máximo porque hay graduandos que ya superan ese límite.",
+      });
+    }
+
+    const actualizada = await client.query(
+      `UPDATE ceremonia_grado
+       SET max_invitados_por_graduando = $1
+       WHERE id_ceremonia = $2
+       RETURNING id_ceremonia::text AS id,
+                 max_invitados_por_graduando AS "maxInvitadosPorGraduando"`,
+      [maxInvitadosPorGraduando, idCeremonia]
+    );
+    await client.query("COMMIT");
+    return res.json(actualizada.rows[0]);
+  } catch (error) {
+    if (client) {
+      await client.query("ROLLBACK").catch((rollbackError) => {
+        console.error("Error al revertir el límite de invitados por graduando:", rollbackError);
+      });
+    }
+    console.error("Error al actualizar el máximo de invitados por graduando:", error);
+    return res.status(500).json({ mensaje: "No fue posible actualizar el máximo de invitados por graduando." });
   } finally {
     client?.release();
   }
@@ -1600,7 +1650,7 @@ app.post("/api/registro-invitados/login", async (req, res) => {
               g.codigo_estudiantil,
               g.requisitos_cumplidos,
               cg.estado AS estado_ceremonia,
-              cg.cupo_invitados,
+              cg.max_invitados_por_graduando,
               (SELECT COUNT(*)::int
                FROM invitado i
                WHERE i.id_graduando = g.id_graduando) AS invitados_registrados,
@@ -1647,7 +1697,7 @@ app.post("/api/registro-invitados/login", async (req, res) => {
       documento: normalizarDocumento(graduando.identificacion),
       codigoEstudiantil: graduando.codigo_estudiantil || "",
       programa: graduando.programa,
-      cupoInvitados: graduando.cupo_invitados,
+      maxInvitadosPorGraduando: graduando.max_invitados_por_graduando,
       invitadosRegistrados: graduando.invitados_registrados,
     });
   } catch (error) {
@@ -1761,7 +1811,7 @@ async function registrarInvitadosEnTransaccion(idGraduando, invitados, requiereR
     await client.query("BEGIN");
     const graduando = await client.query(
       `SELECT g.id_graduando, g.id_ceremonia, g.requisitos_cumplidos,
-              cg.estado AS estado_ceremonia, cg.cupo_invitados
+              cg.estado AS estado_ceremonia, cg.max_invitados_por_graduando
        FROM graduando g
        JOIN ceremonia_grado cg ON cg.id_ceremonia = g.id_ceremonia
        WHERE g.id_graduando = $1
@@ -1795,16 +1845,18 @@ async function registrarInvitadosEnTransaccion(idGraduando, invitados, requiereR
 
     const conteo = await client.query(
       `SELECT COUNT(*)::int AS registrados
-       FROM invitado i
-       JOIN graduando g ON g.id_graduando = i.id_graduando
-       WHERE g.id_ceremonia = $1`,
-      [datosGraduando.id_ceremonia]
+       FROM invitado
+       WHERE id_graduando = $1`,
+      [idGraduando]
     );
-    if (conteo.rows[0].registrados + invitados.length > datosGraduando.cupo_invitados) {
+    if (
+      conteo.rows[0].registrados + invitados.length >
+      datosGraduando.max_invitados_por_graduando
+    ) {
       await client.query("ROLLBACK");
       return {
         status: 409,
-        mensaje: `El cupo de invitados es ${datosGraduando.cupo_invitados}; ya hay ${conteo.rows[0].registrados} registrados.`,
+        mensaje: `El máximo por graduando es ${datosGraduando.max_invitados_por_graduando}; ya tiene ${conteo.rows[0].registrados} registrados.`,
       };
     }
 
@@ -2454,6 +2506,9 @@ app.post("/api/ceremonias", async (req, res) => {
   const cupoInvitados = cuerpo.cupoInvitados === undefined
     ? 2
     : Number(cuerpo.cupoInvitados);
+  const maxInvitadosPorGraduando = cuerpo.maxInvitadosPorGraduando === undefined
+    ? 2
+    : Number(cuerpo.maxInvitadosPorGraduando);
   const estado = cuerpo.estado;
   const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(fecha) &&
     (() => {
@@ -2470,6 +2525,7 @@ app.post("/api/ceremonias", async (req, res) => {
       (!Number.isSafeInteger(idEventoSolicitado) || idEventoSolicitado <= 0)) ||
     !Number.isSafeInteger(idEspacio) || idEspacio <= 0 ||
     !Number.isSafeInteger(cupoInvitados) || cupoInvitados < 0 ||
+    !limitesInvitadosPorGraduando.includes(maxInvitadosPorGraduando) ||
     !estadosCeremoniaCreacion.includes(estado)
   ) {
     return res.status(400).json({ mensaje: "Completa los datos de la ceremonia con valores válidos." });
@@ -2541,10 +2597,11 @@ app.post("/api/ceremonias", async (req, res) => {
     const codigo = `CER-${randomUUID().toUpperCase()}`;
     const creada = await client.query(
       `INSERT INTO ceremonia_grado
-         (id_evento, id_espacio, codigo_ceremonia, nombre, fecha, estado, cupo_invitados)
-       VALUES ($1, $2, $3, $4, $5::date, $6, $7)
+         (id_evento, id_espacio, codigo_ceremonia, nombre, fecha, estado,
+          cupo_invitados, max_invitados_por_graduando)
+       VALUES ($1, $2, $3, $4, $5::date, $6, $7, $8)
        RETURNING id_ceremonia::text AS id`,
-      [idEvento, idEspacio, codigo, nombre, fecha, estado, cupoInvitados]
+      [idEvento, idEspacio, codigo, nombre, fecha, estado, cupoInvitados, maxInvitadosPorGraduando]
     );
     await client.query("COMMIT");
     const referencia = referencias.rows[0];
@@ -2561,6 +2618,7 @@ app.post("/api/ceremonias", async (req, res) => {
       invitados: 0,
       estado,
       cupoInvitados,
+      maxInvitadosPorGraduando,
     });
   } catch (error) {
     if (client) {
